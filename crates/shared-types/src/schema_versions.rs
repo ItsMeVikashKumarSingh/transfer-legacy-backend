@@ -1,0 +1,1 @@
+pub const CURRENT_SCHEMA_VERSION: i32 = 1;

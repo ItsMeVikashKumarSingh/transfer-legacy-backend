@@ -1,0 +1,25 @@
+name: Security Scan
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL
+      - name: Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/ci
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2

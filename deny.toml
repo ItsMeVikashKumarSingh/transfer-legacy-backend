@@ -1,0 +1,12 @@
+# Cargo deny configuration
+
+[licenses]
+deny = ["GPL-3.0", "AGPL-3.0"]
+allow-osi-fsf-free = "either"
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+
+[advisories]
+ignore = []

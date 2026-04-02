@@ -1,0 +1,20 @@
+[package]
+name = "transfer-legacy-api"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = { version = "0.7", features = ["macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "timeout", "request-id", "cors", "limit", "set-header"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+hyper = "1"
+
+transfer-legacy-shared-types = { path = "../shared-types" }

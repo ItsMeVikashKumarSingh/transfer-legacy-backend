@@ -1,0 +1,8 @@
+/target
+/.idea
+/.vscode
+.env
+.env.local
+.env.*
+!.env.example
+.DS_Store
