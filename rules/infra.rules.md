@@ -7,18 +7,18 @@ Reference sections in `project_detail.md`: deployment, environment separation, o
 - Supabase provides PostgreSQL and selected platform services.
 - Redis handles rate limiting, idempotency, and worker queue support.
 - Cloudflare R2 stores encrypted user files.
-- Infisical self-hosted manages application secrets.
+- OpenBao KV manages application secrets.
 - Signing service handles release-record and audit-anchor signatures required by the system design.[file:1]
 
 ## Deployment rules
 - Backend must run in Docker.
 - Containers run as non-root.
 - Production services are internal-network only except reverse proxy / API ingress.
-- No public Redis, no public DB, no public Infisical, no public signing service.
+- No public Redis, no public DB, no public OpenBao, no public signing service.
 - Environments must be fully separated: local, staging, production.
 
 ## Config and secrets
-- Production secrets come from Infisical, not `.env` files.
+- Production secrets come from OpenBao KV, not `.env` files.
 - Local development may use `.env.local`, gitignored only.
 - No secret lookups inside hot request paths if startup loading is sufficient.
 - Rotate credentials on a schedule and after any incident.

@@ -2,7 +2,7 @@
 
 > **Project:** Transfer Legacy (Digital Inheritance Vault)
 > **Stack:** Rust (Axum + Tokio) · PostgreSQL (Supabase) · Redis · Cloudflare R2 ·
->             OpenBao · Infisical · Hetzner CX22 · GitHub Actions
+>             OpenBao · Hetzner CX22 · GitHub Actions
 > **Reference document:** `project_detail.md` (canonical spec — READ ONLY)
 > **Approach:** Production-ready from Phase 0. No throwaway code. No fallback data.
 
@@ -21,7 +21,7 @@
 | PQ KEM | pqcrypto-kyber (Kyber-768) | ML-KEM-768, NIST PQC standard (§4.7) |
 | KDF | argon2 crate | Argon2id, configurable per-device params (§4.4) |
 | Signing (server) | OpenBao Transit (Ed25519) | Self-hosted, mlock, never user-secret adjacent (§23.7) |
-| Config/Secrets | Infisical self-hosted | Runtime injection, no .env in production |
+| Config/Secrets | OpenBao KV | Runtime injection, no .env in production |
 | File storage | Cloudflare R2 | S3-compatible, zero egress, versioning (§23.5) |
 | Background jobs | apalis + Redis | Idempotent, observable, DLQ support |
 | Cron | tokio-cron-scheduler | In-process, no external dependency |
@@ -45,7 +45,7 @@ transfer-legacy/          ← Cargo workspace
 │   ├── crypto-core/      ← all crypto (native + WASM target)
 │   └── shared-types/     ← domain models, error types, schema versions
 ├── migrations/           ← sqlx .sql files
-├── infra/                ← Docker, Caddy, OpenBao, Infisical, scripts
+├── infra/                ← Docker, Caddy, OpenBao, scripts
 ├── rules/                ← 7 rules files
 ├── docs/                 ← runbooks + ADRs (written per phase)
 └── .github/workflows/    ← CI, security scan, deploy
@@ -62,7 +62,7 @@ Copy this into your project tracker. Check off as phases complete.
 - [ ] 0.2 Hetzner CX22 provisioned + hardened
 - [ ] 0.3 Supabase project + 6 schemas + RLS deny-by-default
 - [ ] 0.4 OpenBao Transit engine + Ed25519 signing key + UNSEAL.md written
-- [ ] 0.5 Infisical self-hosted + all secrets populated
+- [ ] 0.5 OpenBao KV + all secrets populated
 - [ ] 0.6 Cloudflare R2 buckets (files, audit-anchors, db-backups)
 - [ ] 0.7 Redis 7 deployed (internal only, requirepass)
 - [ ] 0.8 GitHub Actions: ci.yml + security-scan.yml + deploy.yml
@@ -111,7 +111,7 @@ Copy this into your project tracker. Check off as phases complete.
 
 > **Project:** Transfer Legacy (Digital Inheritance Vault)
 > **Stack:** Rust (Axum + Tokio) · PostgreSQL (Supabase) · Redis · Cloudflare R2
->            · OpenBao · Infisical · Hetzner CX22 · GitHub Actions
+>            · OpenBao · Hetzner CX22 · GitHub Actions
 > **Reference document:** `project_detail.md` (canonical spec — READ ONLY)
 > **Rules files:** `rules/` directory (7 files — READ BEFORE CODING)
 > **Approach:** Production-ready from Phase 0. No throwaway code. No fallbacks.
@@ -131,7 +131,7 @@ Copy this into your project tracker. Check off as phases complete.
 | Crypto | dryoc + pqcrypto + opaque-ke + argon2 | Audited, WASM-compatible |
 | Memory protection | dryoc::protected + zeroize | mlock, zeroise on drop |
 | Signing / KMS | OpenBao Transit (Ed25519) | Self-hosted, no cloud vendor lock |
-| Secret management | Infisical self-hosted | Zero plaintext in env/Docker |
+| Secret management | OpenBao KV | Zero plaintext in env/Docker |
 | File storage | Cloudflare R2 | Zero egress, S3-compatible, versioning |
 | Email | Brevo (SMTP + API templates) | Cost-effective, later → AWS SES |
 | Error tracking | Sentry (PII scrubbed) | Before-send hook strips secrets |
@@ -151,7 +151,7 @@ transfer-legacy/
 │   ├── crypto-core/    ← dryoc + pqcrypto + opaque-ke (native + WASM)
 │   └── shared-types/   ← domain models, errors, schema versions
 ├── migrations/         ← sqlx .sql files
-├── infra/              ← Dockerfile, docker-compose, OpenBao, Infisical
+├── infra/              ← Dockerfile, docker-compose, OpenBao
 ├── rules/              ← 7 rules files
 ├── docs/               ← runbooks (written per phase), ADRs
 └── .github/workflows/  ← ci.yml, security-scan.yml, deploy.yml
@@ -232,13 +232,12 @@ transfer-legacy/
 - [ ] ✍️ Write `infra/openbao/UNSEAL.md` — manual unseal SOP
 - [ ] Write `docs/adr/002-openbao-over-aws-kms.md`
 
-### 0.5 Infisical Setup (Config Management)
+### 0.5 OpenBao KV Setup (Config Management)
 
-- [ ] Deploy Infisical self-hosted via Docker Compose on Hetzner
+- [ ] Enable OpenBao KV (v2) on the Hetzner host
       (separate from API container)
-- [ ] Create project `transfer-legacy`, environments:
-      `development`, `staging`, `production`
-- [ ] Populate secrets:
+- [ ] Create a KV namespace/path for `transfer-legacy`
+- [ ] Populate secrets at that path:
       ```
       SUPABASE_URL
       SUPABASE_SERVICE_ROLE_KEY
@@ -258,7 +257,8 @@ transfer-legacy/
       SERVER_AEAD_KEY                (transport AEAD key — §4.5)
       JWT_SECRET
       ```
-- [ ] Install Infisical CLI on Hetzner — inject secrets into Docker at runtime
+- [ ] Install OpenBao CLI (`bao`) on Hetzner or use the HTTP API to manage KV
+- [ ] API loads secrets from OpenBao KV at startup (no `.env` in production)
 - [ ] RULE: Zero plaintext secrets in `docker-compose.yml`, `Dockerfile`,
       or Git. Ever.
 
@@ -276,7 +276,7 @@ transfer-legacy/
 
 - [ ] Deploy Redis 7 via Docker: `requirepass` set, bind `127.0.0.1` only
 - [ ] `maxmemory-policy allkeys-lru` — not a persistent store
-- [ ] Add `REDIS_URL` to Infisical
+- [ ] Add `REDIS_URL` to OpenBao KV
 
 ### 0.8 GitHub Actions CI Pipeline
 
@@ -330,7 +330,7 @@ transfer-legacy/
 - [ ] `/health` returns 200 from Hetzner
 - [ ] All 6 schemas created, RLS deny-by-default verified on test DB
 - [ ] OpenBao Transit: sign test payload → verify → passes
-- [ ] Infisical injects all secrets into running Docker container
+- [ ] OpenBao KV secrets are available to the API at startup (no `.env` in prod)
 - [ ] R2: presigned PUT upload test succeeds
 - [ ] Sentry receives test event — PII and secret fields absent
 - [ ] `PolicyStatus` enum has exactly 8 states in `shared-types`
@@ -1126,7 +1126,7 @@ transfer-legacy/
 - [ ] 0.2 Hetzner CX22 provisioned + hardened
 - [ ] 0.3 Supabase project + 6 schemas + RLS deny-by-default
 - [ ] 0.4 OpenBao Transit + Ed25519 key + UNSEAL.md written
-- [ ] 0.5 Infisical self-hosted + all 13 secrets populated
+- [ ] 0.5 OpenBao KV + all 13 secrets populated
 - [ ] 0.6 Cloudflare R2 — 3 buckets created + versioning
 - [ ] 0.7 Redis 7 deployed (internal only)
 - [ ] 0.8 GitHub Actions: ci.yml + security-scan.yml + deploy.yml

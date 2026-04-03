@@ -38,7 +38,7 @@
 - **OpenBao** for:
   - Transit signing / verification operations (KMS-like usage)
   - KV secret storage (secret management)
-- **No separate Infisical** for now because OpenBao already covers KMS + secrets
+- **No separate secrets manager** because OpenBao already covers KMS + secrets
 - **Argon2id** for password-derived key material
 - **OPAQUE** for password-authenticated key exchange / password auth flow
 - **XChaCha20-Poly1305** for AEAD payloads
