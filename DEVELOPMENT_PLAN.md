@@ -1,7 +1,7 @@
 # Transfer Legacy — Complete Production Development Plan
 
 > **Project:** Transfer Legacy (Digital Inheritance Vault)
-> **Stack:** Rust (Axum + Tokio) · PostgreSQL (Supabase) · Redis · Cloudflare R2 ·
+> **Stack:** Rust (Axum + Tokio) · PostgreSQL (Supabase) · Redis · Backblaze B2 ·
 >             OpenBao · Hetzner CX22 · GitHub Actions
 > **Reference document:** `project_detail.md` (canonical spec — READ ONLY)
 > **Approach:** Production-ready from Phase 0. No throwaway code. No fallback data.
@@ -22,7 +22,7 @@
 | KDF | argon2 crate | Argon2id, configurable per-device params (§4.4) |
 | Signing (server) | OpenBao Transit (Ed25519) | Self-hosted, mlock, never user-secret adjacent (§23.7) |
 | Config/Secrets | OpenBao KV | Runtime injection, no .env in production |
-| File storage | Cloudflare R2 | S3-compatible, zero egress, versioning (§23.5) |
+| File storage | Backblaze B2 | S3-compatible, zero egress, versioning (§23.5) |
 | Background jobs | apalis + Redis | Idempotent, observable, DLQ support |
 | Cron | tokio-cron-scheduler | In-process, no external dependency |
 | Email | Brevo API (template IDs) | Cost-effective, later migrates to AWS SES |
@@ -63,7 +63,7 @@ Copy this into your project tracker. Check off as phases complete.
 - [ ] 0.3 Supabase project + 6 schemas + RLS deny-by-default
 - [ ] 0.4 OpenBao Transit engine + Ed25519 signing key + UNSEAL.md written
 - [ ] 0.5 OpenBao KV + all secrets populated
-- [ ] 0.6 Cloudflare R2 buckets (files, audit-anchors, db-backups)
+- [ ] 0.6 Backblaze B2 buckets (files, audit-anchors, db-backups)
 - [ ] 0.7 Redis 7 deployed (internal only, requirepass)
 - [ ] 0.8 GitHub Actions: ci.yml + security-scan.yml + deploy.yml
 - [ ] 0.9 Base Axum server: middleware stack + /health + /v1/server-capabilities
@@ -95,12 +95,12 @@ Copy this into your project tracker. Check off as phases complete.
 - [ ] 4.1 apalis + Redis worker infrastructure + DLQ
 - [ ] 4.2 Heartbeat evaluation worker (all 4 cadence/grace rules) (§21)
 - [ ] 4.3 Notification worker: all Brevo templates (§22)
-- [ ] 4.4 Daily audit anchor worker → OpenBao sign → R2 upload (§24.2)
+- [ ] 4.4 Daily audit anchor worker → OpenBao sign → B2 upload (§24.2)
 
 ### Phase 5 — Claims, Files & Attestations
 - [ ] 5.1 claims + claim_attachments + attestations + release_records schema
 - [ ] 5.2 Claim initiation + Type A confirmation window (§23.4)
-- [ ] 5.3 R2 presign + file confirm + hash verify (§23.5)
+- [ ] 5.3 B2 presign + file confirm + hash verify (§23.5)
 - [ ] 5.4 Attestation endpoint + Ed25519 verify + optional Dilithium-2 (§23.6)
 - [ ] 5.5 m-of-n evaluation worker (§23.7 preconditionsHere is the complete updated development plan with all fixes applied and a master checklist at the end. Since I cannot write to a file in this turn, copy this directly — it is the final corrected version.
 
@@ -110,7 +110,7 @@ Copy this into your project tracker. Check off as phases complete.
 # Transfer Legacy — Complete Production Development Plan v2
 
 > **Project:** Transfer Legacy (Digital Inheritance Vault)
-> **Stack:** Rust (Axum + Tokio) · PostgreSQL (Supabase) · Redis · Cloudflare R2
+> **Stack:** Rust (Axum + Tokio) · PostgreSQL (Supabase) · Redis · Backblaze B2
 >            · OpenBao · Hetzner CX22 · GitHub Actions
 > **Reference document:** `project_detail.md` (canonical spec — READ ONLY)
 > **Rules files:** `rules/` directory (7 files — READ BEFORE CODING)
@@ -132,7 +132,7 @@ Copy this into your project tracker. Check off as phases complete.
 | Memory protection | dryoc::protected + zeroize | mlock, zeroise on drop |
 | Signing / KMS | OpenBao Transit (Ed25519) | Self-hosted, no cloud vendor lock |
 | Secret management | OpenBao KV | Zero plaintext in env/Docker |
-| File storage | Cloudflare R2 | Zero egress, S3-compatible, versioning |
+| File storage | Backblaze B2 | Zero egress, S3-compatible, versioning |
 | Email | Brevo (SMTP + API templates) | Cost-effective, later → AWS SES |
 | Error tracking | Sentry (PII scrubbed) | Before-send hook strips secrets |
 | Analytics | PostHog (server-side) | No PII events |
@@ -247,10 +247,10 @@ transfer-legacy/
       OPENBAO_TOKEN
       BREVO_API_KEY
       BREVO_SMTP_PASSWORD
-      CLOUDFLARE_R2_ACCOUNT_ID
-      CLOUDFLARE_R2_ACCESS_KEY
-      CLOUDFLARE_R2_SECRET_KEY
-      CLOUDFLARE_R2_BUCKET_NAME
+      BACKBLAZE_B2_KEY_ID
+      BACKBLAZE_B2_APP_KEY
+      BACKBLAZE_B2_BUCKET_NAME
+      BACKBLAZE_B2_ENDPOINT_URL
       SENTRY_DSN
       POSTHOG_API_KEY
       SERVER_HMAC_SECRET             (invite token HMAC — §23.3)
@@ -262,12 +262,12 @@ transfer-legacy/
 - [ ] RULE: Zero plaintext secrets in `docker-compose.yml`, `Dockerfile`,
       or Git. Ever.
 
-### 0.6 Cloudflare R2 Setup
+### 0.6 Backblaze B2 Setup
 > Ref: `§23.5 File Presign & Upload` of project_detail.md
 
-- [ ] Create R2 bucket `tl-user-files-prod` — encrypted user documents
-- [ ] Create R2 bucket `tl-audit-anchors-prod` — daily signed anchors (`§24.2`)
-- [ ] Create R2 bucket `tl-db-backups-prod` — nightly pg_dump
+- [ ] Create B2 bucket `tl-user-files-prod` — encrypted user documents
+- [ ] Create B2 bucket `tl-audit-anchors-prod` — daily signed anchors (`§24.2`)
+- [ ] Create B2 bucket `tl-db-backups-prod` — nightly pg_dump
 - [ ] Enable versioning on `tl-user-files-prod` (30-day object retention)
 - [ ] API token: `Object Read & Write` on `tl-user-files-prod` only
 - [ ] CORS: allow presigned PUT from app domains only (no wildcard)
@@ -331,7 +331,7 @@ transfer-legacy/
 - [ ] All 6 schemas created, RLS deny-by-default verified on test DB
 - [ ] OpenBao Transit: sign test payload → verify → passes
 - [ ] OpenBao KV secrets are available to the API at startup (no `.env` in prod)
-- [ ] R2: presigned PUT upload test succeeds
+- [ ] B2: presigned PUT upload test succeeds
 - [ ] Sentry receives test event — PII and secret fields absent
 - [ ] `PolicyStatus` enum has exactly 8 states in `shared-types`
 
@@ -696,7 +696,7 @@ transfer-legacy/
 - [ ] Construct `anchor_snapshot` JSON (JCS-canonical):
       `{ date, head_hash, count_audit_entries, server_id }`
 - [ ] Sign `sha256(JCS(anchor_snapshot))` via OpenBao Transit
-- [ ] Upload `anchor_snapshot` + `anchor_sig` to R2:
+- [ ] Upload `anchor_snapshot` + `anchor_sig` to B2:
       `tl-audit-anchors-prod/{YYYY-MM-DD}/anchor.json`
 - [ ] Audit entry: `audit_anchor_created`
 
@@ -706,7 +706,7 @@ transfer-legacy/
 - [ ] All 4 cadence grace rules produce correct values (unit tests per `§21`)
 - [ ] Brevo template called with correct variables (mock test)
 - [ ] Duplicate run for same policy → single notification (idempotency test)
-- [ ] R2 anchor upload succeeds, signature verifies with OpenBao public key
+- [ ] B2 anchor upload succeeds, signature verifies with OpenBao public key
 - [ ] Failed job → `ops.failed_jobs` + Sentry alert after 3 retries
 
 ***
@@ -757,13 +757,13 @@ transfer-legacy/
 
 - [ ] `POST /v1/files/presign` (AEAD):
       `{ claim_id, policy_id, purpose, filename, sha256 }`
-      - Generate R2 presigned PUT URL (15-min TTL)
-      - R2 key: `{policy_id}/{claim_id}/{purpose}/{uuid}.enc`
+      - Generate B2 presigned PUT URL (15-min TTL)
+      - B2 key: `{policy_id}/{claim_id}/{purpose}/{uuid}.enc`
       - Store pending attachment (not confirmed yet)
       - Returns: `{ upload_url, r2_key, expires_at }`
 - [ ] `POST /v1/files/confirm` (AEAD):
       `{ r2_key, sha256 }`
-      - R2 `HeadObject` — verify Content-Length > 0, ETag matches SHA256
+      - B2 `HeadObject` — verify Content-Length > 0, ETag matches SHA256
       - Mark attachment confirmed; `claim.status = docs_uploaded`
       - Audit entry: `proof_uploaded`
       - RULE: server never proxies file bytes — presign only
@@ -866,7 +866,7 @@ transfer-legacy/
       - Returns AEAD-wrapped: `{ release_record, server_sig,
                                   attestations, proofs, audit_entries,
                                   anchor }`
-      - Attachment references are R2 keys (client downloads separately
+      - Attachment references are B2 keys (client downloads separately
         via presigned GET)
 
 ### Phase 6 Acceptance Criteria
@@ -913,7 +913,7 @@ transfer-legacy/
       - Delete Supabase Auth account
       - Audit entry: `user_data_erased` (retained minimum 7 years —
         GDPR Art. 17(3))
-      - R2 files: schedule deletion after 30-day versioning window
+      - B2 files: schedule deletion after 30-day versioning window
 - [ ] Raw IP addresses never stored (only `ip_hash`)
 - [ ] Audit event retention: minimum 7 years for legal defensibility
 
@@ -922,7 +922,7 @@ transfer-legacy/
 - [ ] `prev_hash` links correctly across 100 sequential events
 - [ ] Tampered audit entry detected by verify endpoint
 - [ ] GDPR erasure: `GET /v1/vault/items` returns empty, `emk` gone
-- [ ] Daily anchor: R2 object exists per day, signature valid
+- [ ] Daily anchor: B2 object exists per day, signature valid
 
 ***
 
@@ -1067,7 +1067,7 @@ transfer-legacy/
 - [ ] `infra/scripts/backup.sh` — nightly cron:
       `pg_dump` → `openssl enc -aes-256-gcm`
       (key fetched from OpenBao at runtime, never hardcoded)
-      → upload to R2 `tl-db-backups-prod/{date}.sql.gz.enc`
+      → upload to B2 `tl-db-backups-prod/{date}.sql.gz.enc`
 - [ ] Retention: 30 daily backups, 12 monthly
 - [ ] `infra/scripts/restore-test.sh` — weekly:
       restore backup to ephemeral Postgres container,
@@ -1102,7 +1102,7 @@ transfer-legacy/
 - [ ] Sentry, PostHog, Grafana dashboards reviewed
 - [ ] Rate limits tuned from load test results
 - [ ] All Brevo email templates verified end-to-end in staging
-- [ ] R2 bucket versioning + retention policies confirmed
+- [ ] B2 bucket versioning + retention policies confirmed
 - [ ] `docs/runbooks/` — all 4 runbooks written and reviewed by team
 
 ### Phase 10 Acceptance Criteria
@@ -1127,7 +1127,7 @@ transfer-legacy/
 - [ ] 0.3 Supabase project + 6 schemas + RLS deny-by-default
 - [ ] 0.4 OpenBao Transit + Ed25519 key + UNSEAL.md written
 - [ ] 0.5 OpenBao KV + all 13 secrets populated
-- [ ] 0.6 Cloudflare R2 — 3 buckets created + versioning
+- [ ] 0.6 Backblaze B2 — 3 buckets created + versioning
 - [ ] 0.7 Redis 7 deployed (internal only)
 - [ ] 0.8 GitHub Actions: ci.yml + security-scan.yml + deploy.yml
 - [ ] 0.9 Base Axum: middleware stack + /health + /v1/server-capabilities
@@ -1173,13 +1173,13 @@ transfer-legacy/
 - [ ] 4.2 Heartbeat eval worker (all 4 cadences — §21)
 - [ ] 4.3 Notification worker: 7 Brevo template IDs wired
 - [ ] 4.3 notify.notification_log populated per send attempt
-- [ ] 4.4 Daily audit anchor worker → OpenBao sign → R2 upload
+- [ ] 4.4 Daily audit anchor worker → OpenBao sign → B2 upload
 - [ ] Phase 4 acceptance criteria all green
 
 ### Phase 5 — Claims, Files & Attestations
 - [ ] 5.1 claims + claim_attachments + attestations + release_records schema
 - [ ] 5.2 Claim initiation + Ed25519 sig verify + Type A window
-- [ ] 5.3 R2 presign + HeadObject confirm + SHA256 verify
+- [ ] 5.3 B2 presign + HeadObject confirm + SHA256 verify
 - [ ] 5.4 Attestation endpoint + optional Dilithium-2 + UNIQUE constraint
 - [ ] 5.5 m-of-n evaluation worker (all preconditions — §23.7)
 - [ ] Phase 5 acceptance criteria all green
@@ -1264,3 +1264,4 @@ These are enforced by CI tests, DB triggers, and code review:
    unsupported version → hard reject, never silent coercion. (`§4.15`)
 8. **PostgreSQL transition trigger is the single source of truth for
    policy state** — application code cannot bypass it.
+

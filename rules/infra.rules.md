@@ -6,7 +6,7 @@ Reference sections in `project_detail.md`: deployment, environment separation, o
 - Hetzner hosts the backend runtime.
 - Supabase provides PostgreSQL and selected platform services.
 - Redis handles rate limiting, idempotency, and worker queue support.
-- Cloudflare R2 stores encrypted user files.
+- Backblaze B2 stores encrypted user files.
 - OpenBao KV manages application secrets.
 - Signing service handles release-record and audit-anchor signatures required by the system design.[file:1]
 
@@ -25,7 +25,7 @@ Reference sections in `project_detail.md`: deployment, environment separation, o
 
 ## Backups and recovery
 - PostgreSQL backups must be scheduled and restore-tested.
-- R2 versioning or equivalent recovery path must be enabled for encrypted files.
+- B2 versioning or equivalent recovery path must be enabled for encrypted files.
 - Redis is not a source of truth for user data.
 - Recovery procedures must be documented and tested.
 

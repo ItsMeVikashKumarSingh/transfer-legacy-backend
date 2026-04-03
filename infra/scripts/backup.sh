@@ -6,8 +6,8 @@ if [ -z "${DATABASE_URL:-}" ] || [ -z "${OPENBAO_ADDR:-}" ] || [ -z "${OPENBAO_T
   exit 1
 fi
 
-if [ -z "${R2_BUCKET:-}" ] || [ -z "${R2_ACCESS_KEY:-}" ] || [ -z "${R2_SECRET_KEY:-}" ] || [ -z "${R2_ENDPOINT_URL:-}" ]; then
-  echo "R2_BUCKET, R2_ACCESS_KEY, R2_SECRET_KEY, and R2_ENDPOINT_URL are required"
+if [ -z "${BACKBLAZE_B2_BUCKET_NAME:-}" ] || [ -z "${BACKBLAZE_B2_KEY_ID:-}" ] || [ -z "${BACKBLAZE_B2_APP_KEY:-}" ] || [ -z "${BACKBLAZE_B2_ENDPOINT_URL:-}" ]; then
+  echo "BACKBLAZE_B2_BUCKET_NAME, BACKBLAZE_B2_KEY_ID, BACKBLAZE_B2_APP_KEY, and BACKBLAZE_B2_ENDPOINT_URL are required"
   exit 1
 fi
 
@@ -25,4 +25,5 @@ fi
 
 openssl enc -aes-256-gcm -salt -pbkdf2 -iter 200000 -in "${DUMP_FILE}" -out "${ENC_FILE}" -pass env:BACKUP_KEY
 
-aws s3 cp "${ENC_FILE}" "s3://${R2_BUCKET}/db-backups/${BACKUP_DATE}.sql.gz.enc" --endpoint-url "${R2_ENDPOINT_URL}"
+AWS_ACCESS_KEY_ID="${BACKBLAZE_B2_KEY_ID}" AWS_SECRET_ACCESS_KEY="${BACKBLAZE_B2_APP_KEY}" \
+  aws s3 cp "${ENC_FILE}" "s3://${BACKBLAZE_B2_BUCKET_NAME}/db-backups/${BACKUP_DATE}.sql.gz.enc" --endpoint-url "${BACKBLAZE_B2_ENDPOINT_URL}"
