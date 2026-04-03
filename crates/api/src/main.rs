@@ -11,6 +11,7 @@ mod db;
 mod signing;
 mod storage;
 mod notifications;
+mod state;
 
 use crate::config::Config;
 use crate::errors::ApiError;
@@ -20,7 +21,8 @@ async fn main() -> Result<(), ApiError> {
     telemetry::init_tracing();
 
     let config = Config::from_env()?;
-    let app = router::create_router(&config);
+    let state = state::AppState::new(config.clone()).await?;
+    let app = router::create_router(&config, state);
     let bind_addr = format!("{}:{}", config.bind_addr, config.port);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
 

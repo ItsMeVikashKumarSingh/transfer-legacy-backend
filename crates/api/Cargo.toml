@@ -16,5 +16,20 @@ tower = "0.4"
 tower-http = { version = "0.5", features = ["trace", "timeout", "request-id", "cors", "limit", "set-header"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 hyper = "1"
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres"] }
+redis = { version = "0.25", features = ["tokio-comp"] }
+base64 = "0.22"
+bytes = "1"
+async-trait = "0.1"
+jsonwebtoken = "9"
+time = { version = "0.3", features = ["formatting"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+chrono = { version = "0.4", features = ["serde"] }
+totp-rs = "5"
+rand = "0.8"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
+transfer-legacy-crypto-core = { path = "../crypto-core" }
+
+[dev-dependencies]
+walkdir = "2"

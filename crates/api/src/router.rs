@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{routing::{get, post, put, delete}, Router};
 use axum::http::{HeaderName, HeaderValue, Method};
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -10,9 +10,10 @@ use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::config::Config;
+use crate::state::AppState;
 use crate::handlers::{health, capabilities};
 
-pub fn create_router(config: &Config) -> Router {
+pub fn create_router(config: &Config, state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(config.allowed_origins.clone()))
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
@@ -22,6 +23,7 @@ pub fn create_router(config: &Config) -> Router {
             HeaderName::from_static("x-request-id"),
             HeaderName::from_static("x-seq"),
             HeaderName::from_static("x-timestamp"),
+            HeaderName::from_static("x-device-id"),
             HeaderName::from_static("x-idempotency-key"),
         ]);
 
@@ -52,8 +54,34 @@ pub fn create_router(config: &Config) -> Router {
         .layer(RequestIdLayer::new(HeaderName::from_static("x-request-id"), MakeRequestUuid))
         .layer(crate::middleware::sentry_layer::SentryLayer::new());
 
+    let auth_routes = Router::new()
+        .route("/register/init", post(crate::handlers::auth::register_init))
+        .route("/register/finish", put(crate::handlers::auth::register_finish))
+        .route("/login/init", post(crate::handlers::auth::login_init))
+        .route("/login/finish", post(crate::handlers::auth::login_finish))
+        .route("/logout", post(crate::handlers::auth::logout))
+        .route("/refresh", post(crate::handlers::auth::refresh))
+        .route("/password/reset/request", post(crate::handlers::auth::password_reset_request))
+        .route("/password/reset/confirm", post(crate::handlers::auth::password_reset_confirm))
+        .route("/mfa/totp/enroll", post(crate::handlers::auth::mfa::totp_enroll))
+        .route("/mfa/totp/verify", post(crate::handlers::auth::mfa::totp_verify))
+        .route("/mfa/webauthn/register/start", post(crate::handlers::auth::mfa::webauthn_register_start))
+        .route("/mfa/webauthn/register/finish", post(crate::handlers::auth::mfa::webauthn_register_finish))
+        .route("/mfa/webauthn/authenticate/start", post(crate::handlers::auth::mfa::webauthn_auth_start))
+        .route("/mfa/webauthn/authenticate/finish", post(crate::handlers::auth::mfa::webauthn_auth_finish))
+        .route("/stepup/request", post(crate::handlers::auth::stepup_request))
+        .route("/stepup/verify", post(crate::handlers::auth::stepup_verify));
+
+    let device_routes = Router::new()
+        .route("/register", post(crate::handlers::devices::register))
+        .route("/", post(crate::handlers::devices::list))
+        .route("/:device_id", delete(crate::handlers::devices::revoke));
+
     Router::new()
         .route("/health", get(health))
         .route("/v1/server-capabilities", get(capabilities))
+        .nest("/v1/auth", auth_routes)
+        .nest("/v1/devices", device_routes)
+        .with_state(state)
         .layer(middleware_stack)
 }

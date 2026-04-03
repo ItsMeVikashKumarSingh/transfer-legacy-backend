@@ -14,6 +14,8 @@ pub enum ApiError {
     Io(#[from] std::io::Error),
     #[error("server error: {0}")]
     Server(#[from] hyper::Error),
+    #[error("state error: {0}")]
+    State(#[from] crate::state::StateError),
     #[error("app error: {0}")]
     App(AppError),
     #[error("app error with request id: {0}")]

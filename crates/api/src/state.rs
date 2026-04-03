@@ -1,0 +1,40 @@
+use redis::Client as RedisClient;
+use sqlx::PgPool;
+use transfer_legacy_crypto_core::opaque::{
+    server_setup_from_b64, OpaqueServerSetup, OpaqueError,
+};
+
+use crate::config::Config;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub config: Config,
+    pub db: PgPool,
+    pub redis: RedisClient,
+    pub opaque_setup: OpaqueServerSetup,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum StateError {
+    #[error("database pool error: {0}")]
+    Database(#[from] sqlx::Error),
+    #[error("redis client error: {0}")]
+    Redis(#[from] redis::RedisError),
+    #[error("opaque setup error: {0}")]
+    Opaque(#[from] OpaqueError),
+}
+
+impl AppState {
+    pub async fn new(config: Config) -> Result<Self, StateError> {
+        let db = PgPool::connect(&config.database_url).await?;
+        let redis = RedisClient::open(config.redis_url.as_str())?;
+        let opaque_setup = server_setup_from_b64(&config.opaque_server_setup_b64)?;
+
+        Ok(Self {
+            config,
+            db,
+            redis,
+            opaque_setup,
+        })
+    }
+}
