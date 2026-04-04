@@ -75,3 +75,18 @@ pub async fn revoke_device(pool: &PgPool, user_id: Uuid, device_id: Uuid) -> Res
 
     Ok(())
 }
+
+pub async fn fetch_device_pubkey(
+    pool: &PgPool,
+    user_id: Uuid,
+    device_id: Uuid,
+) -> Result<Vec<u8>, sqlx::Error> {
+    let key = sqlx::query_scalar::<_, Vec<u8>>(
+        "SELECT ed25519_pubkey FROM auth_ext.devices WHERE user_id = $1 AND device_id = $2 AND is_deleted = false",
+    )
+    .bind(user_id)
+    .bind(device_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(key)
+}

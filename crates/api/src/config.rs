@@ -6,6 +6,8 @@ pub struct Config {
     pub bind_addr: String,
     pub port: u16,
     pub allowed_origins: Vec<HeaderValue>,
+    pub app_url: String,
+    pub brand_name: String,
     pub database_url: String,
     pub redis_url: String,
     pub server_aead_key_b64: String,
@@ -14,6 +16,9 @@ pub struct Config {
     pub supabase_url: String,
     pub supabase_anon_key: String,
     pub supabase_service_role_key: String,
+    pub server_hmac_secret: String,
+    pub brevo_api_key: String,
+    pub brevo_invite_template_id: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -46,6 +51,8 @@ impl Config {
             return Err(ConfigError::MissingVar("TL_ALLOWED_ORIGINS"));
         }
 
+        let app_url = env::var("TL_APP_URL").map_err(|_| ConfigError::MissingVar("TL_APP_URL"))?;
+        let brand_name = env::var("TL_BRAND_NAME").map_err(|_| ConfigError::MissingVar("TL_BRAND_NAME"))?;
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?;
         let redis_url = env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?;
@@ -61,11 +68,19 @@ impl Config {
             .map_err(|_| ConfigError::MissingVar("SUPABASE_ANON_KEY"))?;
         let supabase_service_role_key = env::var("SUPABASE_SERVICE_ROLE_KEY")
             .map_err(|_| ConfigError::MissingVar("SUPABASE_SERVICE_ROLE_KEY"))?;
+        let server_hmac_secret = env::var("SERVER_HMAC_SECRET")
+            .map_err(|_| ConfigError::MissingVar("SERVER_HMAC_SECRET"))?;
+        let brevo_api_key = env::var("BREVO_API_KEY")
+            .map_err(|_| ConfigError::MissingVar("BREVO_API_KEY"))?;
+        let brevo_invite_template_id = env::var("BREVO_INVITE_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_INVITE_TEMPLATE_ID"))?;
 
         Ok(Self {
             bind_addr,
             port,
             allowed_origins,
+            app_url,
+            brand_name,
             database_url,
             redis_url,
             server_aead_key_b64,
@@ -74,6 +89,9 @@ impl Config {
             supabase_url,
             supabase_anon_key,
             supabase_service_role_key,
+            server_hmac_secret,
+            brevo_api_key,
+            brevo_invite_template_id,
         })
     }
 }

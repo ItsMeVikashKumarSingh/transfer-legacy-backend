@@ -87,12 +87,19 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/shares/revoke", post(crate::handlers::vault::revoke_share_handler))
         .route("/migrate", post(crate::handlers::vault::migrate_crypto));
 
+    let inheritance_routes = Router::new()
+        .route("/policy", put(crate::handlers::inheritance::upsert_policy))
+        .route("/heartbeat", post(crate::handlers::inheritance::heartbeat))
+        .route("/policy/:policy_id/invite", post(crate::handlers::inheritance::create_invite))
+        .route("/claim-token/consume", post(crate::handlers::inheritance::consume_claim_token));
+
     Router::new()
         .route("/health", get(health))
         .route("/v1/server-capabilities", get(capabilities))
         .nest("/v1/auth", auth_routes)
         .nest("/v1/devices", device_routes)
         .nest("/v1/vault", vault_routes)
+        .nest("/v1/inheritance", inheritance_routes)
         .with_state(state)
         .layer(middleware_stack)
 }

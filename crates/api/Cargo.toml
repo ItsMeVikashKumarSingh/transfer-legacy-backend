@@ -27,6 +27,8 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 chrono = { version = "0.4", features = ["serde"] }
 totp-rs = "5"
 rand = "0.8"
+hmac = "0.12"
+sha2 = "0.10"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }
