@@ -21,6 +21,11 @@ pub struct AuditAnchorJob {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseEvalJob {
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotifyJob {
     pub policy_id: Option<Uuid>,
     pub email: String,
@@ -42,6 +47,8 @@ pub enum JobError {
     Storage,
     #[error("anchor error")]
     Anchor,
+    #[error("release error")]
+    Release,
 }
 
 pub async fn run_heartbeat_eval(
@@ -256,6 +263,54 @@ pub async fn run_audit_anchor(
     .execute(&state.db)
     .await
     .map_err(|_| JobError::Database)?;
+
+    Ok(())
+}
+
+pub async fn run_release_eval(
+    _: ReleaseEvalJob,
+    state: Data<AppState>,
+) -> Result<(), JobError> {
+    let rows = sqlx::query_as::<_, (Uuid, serde_json::Value, Uuid)>(
+        "SELECT p.policy_id, p.m_of_n, c.claim_id FROM inheritance.policies p JOIN inheritance.claims c ON c.policy_id = p.policy_id WHERE p.policy_type = 'm_of_n' AND p.status = 'investigating' AND c.status = 'confirmed'",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| JobError::Database)?;
+
+    for row in rows {
+        let m = row.1.get("m").and_then(|v| v.as_i64()).unwrap_or(0);
+        if m <= 0 {
+            continue;
+        }
+        let count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM inheritance.attestations WHERE claim_id = $1",
+        )
+        .bind(row.2)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| JobError::Database)?;
+
+        if count >= m {
+            let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
+            sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
+                .bind(row.0)
+                .execute(&mut *tx)
+                .await
+                .map_err(|_| JobError::Database)?;
+
+            let payload = serde_json::json!({
+                "policy_id": row.0,
+                "claim_id": row.2,
+                "attestation_count": count,
+                "required": m,
+            });
+            audit::append_event(&mut tx, row.0, "m_of_n_release_ready", &payload)
+                .await
+                .map_err(|_| JobError::Audit)?;
+            tx.commit().await.map_err(|_| JobError::Database)?;
+        }
+    }
 
     Ok(())
 }

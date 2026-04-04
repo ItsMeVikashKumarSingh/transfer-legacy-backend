@@ -1,6 +1,6 @@
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-use crate::jobs::{AuditAnchorJob, HeartbeatEvalJob};
+use crate::jobs::{AuditAnchorJob, HeartbeatEvalJob, ReleaseEvalJob};
 use crate::queue::Queues;
 use chrono::Utc;
 
@@ -34,6 +34,17 @@ pub async fn start_scheduler(queues: Queues) -> Result<JobScheduler, SchedulerEr
     .map_err(|_| SchedulerError::Scheduler)?;
     sched.add(anchor_job).map_err(|_| SchedulerError::Scheduler)?;
 
+    let release_storage = queues.release_eval_storage.clone();
+    let release_job = Job::new_async("0 10 * * * *", move |_id, _lock| {
+        let storage = release_storage.clone();
+        Box::pin(async move {
+            let _ = storage.push(ReleaseEvalJob { attempts: 0 }).await;
+        })
+    })
+    .map_err(|_| SchedulerError::Scheduler)?;
+    sched.add(release_job).map_err(|_| SchedulerError::Scheduler)?;
+
     sched.start().await.map_err(|_| SchedulerError::Scheduler)?;
+
     Ok(sched)
 }

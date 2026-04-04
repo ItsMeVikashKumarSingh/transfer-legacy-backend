@@ -29,6 +29,8 @@ totp-rs = "5"
 rand = "0.8"
 hmac = "0.12"
 sha2 = "0.10"
+aws-config = "1"
+aws-sdk-s3 = "1"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }

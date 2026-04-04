@@ -10,6 +10,12 @@ pub struct Config {
     pub brand_name: String,
     pub database_url: String,
     pub redis_url: String,
+    pub openbao_addr: String,
+    pub openbao_token: String,
+    pub b2_key_id: String,
+    pub b2_app_key: String,
+    pub b2_bucket_name: String,
+    pub b2_endpoint_url: String,
     pub server_aead_key_b64: String,
     pub opaque_server_setup_b64: String,
     pub jwt_secret: String,
@@ -56,6 +62,18 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?;
         let redis_url = env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?;
+        let openbao_addr = env::var("OPENBAO_ADDR")
+            .map_err(|_| ConfigError::MissingVar("OPENBAO_ADDR"))?;
+        let openbao_token = env::var("OPENBAO_TOKEN")
+            .map_err(|_| ConfigError::MissingVar("OPENBAO_TOKEN"))?;
+        let b2_key_id = env::var("BACKBLAZE_B2_KEY_ID")
+            .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_KEY_ID"))?;
+        let b2_app_key = env::var("BACKBLAZE_B2_APP_KEY")
+            .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_APP_KEY"))?;
+        let b2_bucket_name = env::var("BACKBLAZE_B2_BUCKET_NAME")
+            .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_BUCKET_NAME"))?;
+        let b2_endpoint_url = env::var("BACKBLAZE_B2_ENDPOINT_URL")
+            .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_ENDPOINT_URL"))?;
         let server_aead_key_b64 = env::var("SERVER_AEAD_KEY")
             .map_err(|_| ConfigError::MissingVar("SERVER_AEAD_KEY"))?;
         let opaque_server_setup_b64 = env::var("OPAQUE_SERVER_SETUP")
@@ -83,6 +101,12 @@ impl Config {
             brand_name,
             database_url,
             redis_url,
+            openbao_addr,
+            openbao_token,
+            b2_key_id,
+            b2_app_key,
+            b2_bucket_name,
+            b2_endpoint_url,
             server_aead_key_b64,
             opaque_server_setup_b64,
             jwt_secret,

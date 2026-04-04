@@ -6,3 +6,4 @@ pub mod vault;
 pub mod inheritance;
 pub mod audit;
 pub mod notify;
+pub mod claims;

@@ -93,6 +93,14 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/policy/:policy_id/invite", post(crate::handlers::inheritance::create_invite))
         .route("/claim-token/consume", post(crate::handlers::inheritance::consume_claim_token));
 
+    let claims_routes = Router::new()
+        .route("/initiate", post(crate::handlers::claims::initiate_claim))
+        .route("/confirm", post(crate::handlers::claims::confirm_claim))
+        .route("/attachments/presign", post(crate::handlers::claims::presign_attachment))
+        .route("/attachments/confirm", post(crate::handlers::claims::confirm_attachment))
+        .route("/attestations", post(crate::handlers::claims::submit_attestation))
+        .route("/release-records", post(crate::handlers::claims::create_release_record));
+
     Router::new()
         .route("/health", get(health))
         .route("/v1/server-capabilities", get(capabilities))
@@ -100,6 +108,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .nest("/v1/devices", device_routes)
         .nest("/v1/vault", vault_routes)
         .nest("/v1/inheritance", inheritance_routes)
+        .nest("/v1/claims", claims_routes)
         .with_state(state)
         .layer(middleware_stack)
 }
