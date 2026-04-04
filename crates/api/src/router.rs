@@ -77,11 +77,22 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/", post(crate::handlers::devices::list))
         .route("/:device_id", delete(crate::handlers::devices::revoke));
 
+    let vault_routes = Router::new()
+        .route("/items", post(crate::handlers::vault::create_item))
+        .route("/items/list", post(crate::handlers::vault::list_items_handler))
+        .route("/items/get", post(crate::handlers::vault::get_item_handler))
+        .route("/items/delete", post(crate::handlers::vault::delete_item_handler))
+        .route("/shares", post(crate::handlers::vault::create_share))
+        .route("/shares/list", post(crate::handlers::vault::list_shares_handler))
+        .route("/shares/revoke", post(crate::handlers::vault::revoke_share_handler))
+        .route("/migrate", post(crate::handlers::vault::migrate_crypto));
+
     Router::new()
         .route("/health", get(health))
         .route("/v1/server-capabilities", get(capabilities))
         .nest("/v1/auth", auth_routes)
         .nest("/v1/devices", device_routes)
+        .nest("/v1/vault", vault_routes)
         .with_state(state)
         .layer(middleware_stack)
 }
