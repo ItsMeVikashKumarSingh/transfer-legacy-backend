@@ -11,7 +11,7 @@ use crate::errors::ApiError;
 use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::notifications::brevo::send_invite_email;
-use crate::services::audit::append_event;
+use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::services::hmac::compute_hmac;
 use crate::state::AppState;
 use crate::db::queries::inheritance::fetch_policy;
@@ -94,7 +94,8 @@ pub async fn create_invite(
         "expires_at": expires_at,
     });
 
-    append_event(&mut tx, policy_id, "invite_created", &invite_payload, None, None)
+    let ip_hash = ip_hash_from_headers(&headers);
+    append_event(&mut tx, policy_id, "invite_created", &invite_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     tx.commit().await

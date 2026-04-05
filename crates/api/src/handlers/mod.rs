@@ -5,6 +5,8 @@ pub mod devices;
 pub mod vault;
 pub mod inheritance;
 pub mod claims;
+pub mod audit;
+pub mod gdpr;
 
 pub use health::health;
 pub use capabilities::capabilities;

@@ -1,3 +1,4 @@
+use axum::http::HeaderMap;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::Value;
 use sqlx::Postgres;
@@ -60,4 +61,13 @@ pub async fn append_event(
         .map_err(|_| AuditError::Database)?;
 
     Ok(event_hash)
+}
+
+pub fn ip_hash_from_headers(headers: &HeaderMap) -> Option<Vec<u8>> {
+    let header = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"));
+    let value = header.and_then(|v| v.to_str().ok())?;
+    let ip = value.split(',').next().map(|s| s.trim()).filter(|s| !s.is_empty())?;
+    Some(sha256(ip.as_bytes()))
 }

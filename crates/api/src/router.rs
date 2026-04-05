@@ -103,6 +103,13 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/attestations", post(crate::handlers::claims::submit_attestation))
         .route("/release-records", post(crate::handlers::claims::create_release_record));
 
+    let audit_routes = Router::new()
+        .route("/chain", get(crate::handlers::audit::audit_chain));
+
+    let gdpr_routes = Router::new()
+        .route("/export", post(crate::handlers::gdpr::export_gdpr))
+        .route("/erase", post(crate::handlers::gdpr::erase_gdpr));
+
     Router::new()
         .route("/health", get(health))
         .route("/v1/server-capabilities", get(capabilities))
@@ -111,6 +118,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .nest("/v1/vault", vault_routes)
         .nest("/v1/inheritance", inheritance_routes)
         .nest("/v1/claims", claims_routes)
+        .nest("/v1/audit", audit_routes)
+        .nest("/v1/gdpr", gdpr_routes)
         .with_state(state)
         .layer(middleware_stack)
 }

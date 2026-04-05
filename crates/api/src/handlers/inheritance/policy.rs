@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
 use crate::middleware::rate_limit::require_idempotency;
-use crate::services::audit::append_event;
+use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::state::AppState;
 use crate::db::queries::inheritance::{fetch_policy_for_update_tx, insert_policy_tx, update_policy_tx};
 use crate::db::queries::stepup::{fetch_stepup_challenge_tx, consume_stepup_challenge_tx};
@@ -137,7 +137,8 @@ pub async fn upsert_policy(
         "grace_deadline": grace_deadline,
     });
 
-    append_event(&mut tx, policy_id, event_type, &policy_payload, Some(payload.owner_id), None)
+    let ip_hash = ip_hash_from_headers(&headers);
+    append_event(&mut tx, policy_id, event_type, &policy_payload, Some(payload.owner_id), ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 

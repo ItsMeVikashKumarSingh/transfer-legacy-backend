@@ -90,7 +90,8 @@ pub async fn initiate_claim(
         "status": status,
         "confirmation_deadline": confirmation_deadline,
     });
-    audit::append_event(&mut tx, payload.policy_id, "claim_initiated", &audit_payload, Some(policy.owner_id), None)
+    let ip_hash = audit::ip_hash_from_headers(&headers);
+    audit::append_event(&mut tx, payload.policy_id, "claim_initiated", &audit_payload, Some(policy.owner_id), ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -166,7 +167,8 @@ pub async fn confirm_claim(
         "policy_id": claim.policy_id,
         "status": "confirmed",
     });
-    audit::append_event(&mut tx, claim.policy_id, "claim_confirmed", &audit_payload, None, None)
+    let ip_hash = audit::ip_hash_from_headers(&headers);
+    audit::append_event(&mut tx, claim.policy_id, "claim_confirmed", &audit_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -271,7 +273,8 @@ pub async fn confirm_attachment(
         "claim_id": claim_id,
         "policy_id": policy_id,
     });
-    audit::append_event(&mut tx, policy_id, "claim_attachment_confirmed", &audit_payload, None, None)
+    let ip_hash = audit::ip_hash_from_headers(&headers);
+    audit::append_event(&mut tx, policy_id, "claim_attachment_confirmed", &audit_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -374,7 +377,8 @@ pub async fn submit_attestation(
         "claim_id": payload.claim_id,
         "approver_person_id": payload.approver_person_id,
     });
-    audit::append_event(&mut tx, payload.policy_id, "attestation_submitted", &audit_payload, None, None)
+    let ip_hash = audit::ip_hash_from_headers(&headers);
+    audit::append_event(&mut tx, payload.policy_id, "attestation_submitted", &audit_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -441,7 +445,8 @@ pub async fn create_release_record(
         "policy_id": payload.policy_id,
         "claim_id": payload.claim_id,
     });
-    audit::append_event(&mut tx, payload.policy_id, "release_record_created", &audit_payload, None, None)
+    let ip_hash = audit::ip_hash_from_headers(&headers);
+    audit::append_event(&mut tx, payload.policy_id, "release_record_created", &audit_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 

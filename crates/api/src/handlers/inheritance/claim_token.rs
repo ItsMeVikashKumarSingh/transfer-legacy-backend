@@ -10,7 +10,7 @@ use crate::db::queries::notify::{fetch_invite_for_update, mark_invite_used};
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
 use crate::middleware::rate_limit::require_idempotency;
-use crate::services::audit::append_event;
+use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::services::hmac::verify_hmac;
 use crate::state::AppState;
 
@@ -97,7 +97,8 @@ pub async fn consume_claim_token(
         "policy_id": invite.policy_id,
         "person_id": payload.person_id,
     });
-    append_event(&mut tx, invite.policy_id, "invite_consumed", &consume_payload, None, None)
+    let ip_hash = ip_hash_from_headers(&headers);
+    append_event(&mut tx, invite.policy_id, "invite_consumed", &consume_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 

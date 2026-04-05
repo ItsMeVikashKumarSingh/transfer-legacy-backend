@@ -10,7 +10,7 @@ use crate::db::queries::inheritance::{fetch_policy, insert_heartbeat_tx, update_
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
 use crate::middleware::rate_limit::require_idempotency;
-use crate::services::audit::append_event;
+use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::state::AppState;
 use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize, signatures::verify_ed25519};
 
@@ -105,7 +105,8 @@ pub async fn heartbeat(
         "ts": payload.ts,
         "status": new_status,
     });
-    append_event(&mut tx, payload.policy_id, "heartbeat_received", &heartbeat_payload, Some(policy.owner_id), None)
+    let ip_hash = ip_hash_from_headers(&headers);
+    append_event(&mut tx, payload.policy_id, "heartbeat_received", &heartbeat_payload, Some(policy.owner_id), ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 

@@ -2,6 +2,16 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+#[derive(Debug)]
+pub struct AuditEventRow {
+    pub event_id: Uuid,
+    pub event_type: String,
+    pub payload_hash: Vec<u8>,
+    pub prev_hash: Option<Vec<u8>>,
+    pub event_hash: Vec<u8>,
+    pub created_at: DateTime<Utc>,
+}
+
 pub async fn insert_audit_event(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
@@ -56,4 +66,28 @@ pub async fn update_policy_audit_head(
     .execute(&mut *tx)
     .await?;
     Ok(())
+}
+
+pub async fn fetch_audit_chain(
+    pool: &PgPool,
+    policy_id: Uuid,
+) -> Result<Vec<AuditEventRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (Uuid, String, Vec<u8>, Option<Vec<u8>>, Vec<u8>, DateTime<Utc>)>(
+        "SELECT event_id, event_type, payload_hash, prev_hash, event_hash, created_at FROM audit.events WHERE policy_id = $1 ORDER BY created_at ASC",
+    )
+    .bind(policy_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| AuditEventRow {
+            event_id: r.0,
+            event_type: r.1,
+            payload_hash: r.2,
+            prev_hash: r.3,
+            event_hash: r.4,
+            created_at: r.5,
+        })
+        .collect())
 }

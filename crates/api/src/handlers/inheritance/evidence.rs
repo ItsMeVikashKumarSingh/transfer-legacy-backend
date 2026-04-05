@@ -115,7 +115,8 @@ pub async fn create_evidence_package(
         "claim_id": payload.claim_id,
         "signature": signature,
     });
-    audit::append_event(&mut tx, payload.policy_id, "evidence_package_created", &audit_payload, None, None)
+    let ip_hash = audit::ip_hash_from_headers(&headers);
+    audit::append_event(&mut tx, payload.policy_id, "evidence_package_created", &audit_payload, None, ip_hash)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     tx.commit().await
