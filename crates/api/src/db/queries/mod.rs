@@ -7,3 +7,4 @@ pub mod inheritance;
 pub mod audit;
 pub mod notify;
 pub mod claims;
+pub mod evidence;

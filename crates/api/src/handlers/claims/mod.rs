@@ -75,7 +75,7 @@ pub async fn initiate_claim(
     .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     if status == "confirmed" {
-        sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
+        sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
             .bind(payload.policy_id)
             .execute(&mut *tx)
             .await
@@ -155,7 +155,7 @@ pub async fn confirm_claim(
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
-    sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
+    sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
         .bind(claim.policy_id)
         .execute(&mut *tx)
         .await

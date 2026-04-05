@@ -139,6 +139,33 @@ pub async fn list_shares(pool: &PgPool, owner_id: Uuid) -> Result<Vec<VaultShare
     }).collect())
 }
 
+pub async fn list_shares_for_grantee_owner(
+    pool: &PgPool,
+    owner_id: Uuid,
+    grantee_id: Uuid,
+) -> Result<Vec<VaultShareRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, Uuid, Uuid, Vec<u8>, Vec<u8>, chrono::DateTime<chrono::Utc>)>(
+        "SELECT share_id, item_id, owner_id, grantee_id, envelope, grant_sig, created_at FROM vault.shares WHERE owner_id = $1 AND grantee_id = $2 AND is_deleted = false",
+    )
+    .bind(owner_id)
+    .bind(grantee_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| VaultShareRow {
+            share_id: r.0,
+            item_id: r.1,
+            owner_id: r.2,
+            grantee_id: r.3,
+            envelope: r.4,
+            grant_sig: r.5,
+            created_at: r.6,
+        })
+        .collect())
+}
+
 pub async fn revoke_share(pool: &PgPool, owner_id: Uuid, share_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE vault.shares SET is_deleted = true, deleted_at = now() WHERE owner_id = $1 AND share_id = $2",

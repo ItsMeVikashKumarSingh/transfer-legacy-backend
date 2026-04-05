@@ -91,7 +91,9 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/policy", put(crate::handlers::inheritance::upsert_policy))
         .route("/heartbeat", post(crate::handlers::inheritance::heartbeat))
         .route("/policy/:policy_id/invite", post(crate::handlers::inheritance::create_invite))
-        .route("/claim-token/consume", post(crate::handlers::inheritance::consume_claim_token));
+        .route("/claim-token/consume", post(crate::handlers::inheritance::consume_claim_token))
+        .route("/envelopes", get(crate::handlers::inheritance::list_envelopes))
+        .route("/evidence-package", post(crate::handlers::inheritance::create_evidence_package));
 
     let claims_routes = Router::new()
         .route("/initiate", post(crate::handlers::claims::initiate_claim))

@@ -26,6 +26,16 @@ pub struct ReleaseEvalJob {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictCheckJob {
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseDeliveryJob {
+    pub attempts: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotifyJob {
     pub policy_id: Option<Uuid>,
     pub email: String,
@@ -49,6 +59,8 @@ pub enum JobError {
     Anchor,
     #[error("release error")]
     Release,
+    #[error("conflict error")]
+    Conflict,
 }
 
 pub async fn run_heartbeat_eval(
@@ -293,7 +305,7 @@ pub async fn run_release_eval(
 
         if count >= m {
             let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
-            sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
+            sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
                 .bind(row.0)
                 .execute(&mut *tx)
                 .await
@@ -309,6 +321,151 @@ pub async fn run_release_eval(
                 .await
                 .map_err(|_| JobError::Audit)?;
             tx.commit().await.map_err(|_| JobError::Database)?;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn run_conflict_check(
+    _: ConflictCheckJob,
+    state: Data<AppState>,
+) -> Result<(), JobError> {
+    let conflicts = sqlx::query_as::<_, (Uuid, i64)>(
+        "SELECT policy_id, COUNT(DISTINCT claimant_person_id) FROM inheritance.claims WHERE status = 'confirmed' GROUP BY policy_id HAVING COUNT(DISTINCT claimant_person_id) > 1",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| JobError::Database)?;
+
+    for row in conflicts {
+        let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
+        let updated = sqlx::query(
+            "UPDATE inheritance.policies SET status = 'conflict_pending', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'release_ready'",
+        )
+        .bind(row.0)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| JobError::Database)?;
+
+        if updated.rows_affected() > 0 {
+            let details = serde_json::json!({
+                "distinct_claimants": row.1,
+            });
+            sqlx::query(
+                "INSERT INTO ops.conflict_records (conflict_id, policy_id, reason, details) VALUES ($1,$2,$3,$4)",
+            )
+            .bind(Uuid::new_v4())
+            .bind(row.0)
+            .bind("multiple_confirmed_claimants")
+            .bind(details)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| JobError::Database)?;
+
+            let payload = serde_json::json!({
+                "policy_id": row.0,
+                "reason": "multiple_confirmed_claimants",
+            });
+            audit::append_event(&mut tx, row.0, "conflict_detected", &payload)
+                .await
+                .map_err(|_| JobError::Audit)?;
+        }
+
+        tx.commit().await.map_err(|_| JobError::Database)?;
+    }
+
+    let manual_rows = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT policy_id FROM inheritance.policies WHERE status = 'conflict_pending' AND conflict_hold_until <= now()",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| JobError::Database)?;
+
+    for row in manual_rows {
+        let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
+        sqlx::query(
+            "UPDATE inheritance.policies SET status = 'manual_review', updated_at = now() WHERE policy_id = $1 AND status = 'conflict_pending'",
+        )
+        .bind(row.0)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| JobError::Database)?;
+
+        sqlx::query(
+            "INSERT INTO ops.manual_reviews (review_id, policy_id) VALUES ($1,$2)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(row.0)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| JobError::Database)?;
+
+        let payload = serde_json::json!({
+            "policy_id": row.0,
+            "status": "manual_review",
+        });
+        audit::append_event(&mut tx, row.0, "manual_review_opened", &payload)
+            .await
+            .map_err(|_| JobError::Audit)?;
+        tx.commit().await.map_err(|_| JobError::Database)?;
+    }
+
+    Ok(())
+}
+
+pub async fn run_release_delivery(
+    _: ReleaseDeliveryJob,
+    state: Data<AppState>,
+) -> Result<(), JobError> {
+    let rows = sqlx::query_as::<_, (Uuid, serde_json::Value)>(
+        "SELECT policy_id, beneficiaries FROM inheritance.policies WHERE status = 'release_ready' AND conflict_hold_until <= now()",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| JobError::Database)?;
+
+    for row in rows {
+        let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
+        let updated = sqlx::query(
+            "UPDATE inheritance.policies SET status = 'released', updated_at = now() WHERE policy_id = $1 AND status = 'release_ready'",
+        )
+        .bind(row.0)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| JobError::Database)?;
+
+        if updated.rows_affected() > 0 {
+            let payload = serde_json::json!({
+                "policy_id": row.0,
+                "status": "released",
+            });
+            audit::append_event(&mut tx, row.0, "policy_released", &payload)
+                .await
+                .map_err(|_| JobError::Audit)?;
+        }
+
+        tx.commit().await.map_err(|_| JobError::Database)?;
+
+        for email in extract_emails(&row.1) {
+            let params = serde_json::json!({
+                "brand_name": state.config.brand_name.clone(),
+                "app_url": state.config.app_url.clone(),
+                "policy_id": row.0,
+            });
+            let dedupe_key = format!("release-ready-{}-{}", row.0, email);
+            enqueue_notify(
+                &state,
+                NotifyJob {
+                    policy_id: Some(row.0),
+                    email,
+                    template_id: state.config.brevo_release_ready_template_id.clone(),
+                    params,
+                    dedupe_key,
+                    attempts: 0,
+                },
+            )
+            .await?;
         }
     }
 

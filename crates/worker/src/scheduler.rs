@@ -1,6 +1,6 @@
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-use crate::jobs::{AuditAnchorJob, HeartbeatEvalJob, ReleaseEvalJob};
+use crate::jobs::{AuditAnchorJob, ConflictCheckJob, HeartbeatEvalJob, ReleaseDeliveryJob, ReleaseEvalJob};
 use crate::queue::Queues;
 use chrono::Utc;
 
@@ -43,6 +43,26 @@ pub async fn start_scheduler(queues: Queues) -> Result<JobScheduler, SchedulerEr
     })
     .map_err(|_| SchedulerError::Scheduler)?;
     sched.add(release_job).map_err(|_| SchedulerError::Scheduler)?;
+
+    let conflict_storage = queues.conflict_check_storage.clone();
+    let conflict_job = Job::new_async("0 15 * * * *", move |_id, _lock| {
+        let storage = conflict_storage.clone();
+        Box::pin(async move {
+            let _ = storage.push(ConflictCheckJob { attempts: 0 }).await;
+        })
+    })
+    .map_err(|_| SchedulerError::Scheduler)?;
+    sched.add(conflict_job).map_err(|_| SchedulerError::Scheduler)?;
+
+    let delivery_storage = queues.release_delivery_storage.clone();
+    let delivery_job = Job::new_async("0 20 * * * *", move |_id, _lock| {
+        let storage = delivery_storage.clone();
+        Box::pin(async move {
+            let _ = storage.push(ReleaseDeliveryJob { attempts: 0 }).await;
+        })
+    })
+    .map_err(|_| SchedulerError::Scheduler)?;
+    sched.add(delivery_job).map_err(|_| SchedulerError::Scheduler)?;
 
     sched.start().await.map_err(|_| SchedulerError::Scheduler)?;
 

@@ -6,7 +6,7 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use transfer_legacy_worker::config::Config;
 use transfer_legacy_worker::dlq::record_failed_job;
-use transfer_legacy_worker::jobs::{run_audit_anchor, run_heartbeat_eval, run_notify, run_release_eval, AuditAnchorJob, HeartbeatEvalJob, NotifyJob, ReleaseEvalJob};
+use transfer_legacy_worker::jobs::{run_audit_anchor, run_conflict_check, run_heartbeat_eval, run_notify, run_release_delivery, run_release_eval, AuditAnchorJob, ConflictCheckJob, HeartbeatEvalJob, NotifyJob, ReleaseDeliveryJob, ReleaseEvalJob};
 use transfer_legacy_worker::queue::Queues;
 use transfer_legacy_worker::scheduler::start_scheduler;
 use transfer_legacy_worker::state::AppState;
@@ -34,6 +34,8 @@ async fn main() -> Result<(), std::io::Error> {
         notify_storage: queues.notify_storage.clone(),
         audit_anchor_storage: queues.audit_anchor_storage.clone(),
         release_eval_storage: queues.release_eval_storage.clone(),
+        conflict_check_storage: queues.conflict_check_storage.clone(),
+        release_delivery_storage: queues.release_delivery_storage.clone(),
     };
 
     let _scheduler = start_scheduler(queues.clone())
@@ -109,11 +111,47 @@ async fn main() -> Result<(), std::io::Error> {
             Ok(())
         });
 
+    let conflict_worker = WorkerBuilder::new("conflict-check")
+        .data(state.clone())
+        .with_storage(queues.conflict_check_storage.clone())
+        .build(|job: ConflictCheckJob, state: Data<AppState>| async move {
+            let result = run_conflict_check(job.clone(), state.clone()).await;
+            if let Err(err) = result {
+                let attempts = job.attempts + 1;
+                if attempts >= 3 {
+                    let _ = record_failed_job(&state.db, "ConflictCheckJob", &job, &format!("{:?}", err), attempts as i32).await;
+                    return Ok(());
+                }
+                let retry = ConflictCheckJob { attempts };
+                let _ = state.conflict_check_storage.push(retry).await;
+            }
+            Ok(())
+        });
+
+    let delivery_worker = WorkerBuilder::new("release-delivery")
+        .data(state.clone())
+        .with_storage(queues.release_delivery_storage.clone())
+        .build(|job: ReleaseDeliveryJob, state: Data<AppState>| async move {
+            let result = run_release_delivery(job.clone(), state.clone()).await;
+            if let Err(err) = result {
+                let attempts = job.attempts + 1;
+                if attempts >= 3 {
+                    let _ = record_failed_job(&state.db, "ReleaseDeliveryJob", &job, &format!("{:?}", err), attempts as i32).await;
+                    return Ok(());
+                }
+                let retry = ReleaseDeliveryJob { attempts };
+                let _ = state.release_delivery_storage.push(retry).await;
+            }
+            Ok(())
+        });
+
     tokio::select! {
         _ = heartbeat_worker.run() => {},
         _ = notify_worker.run() => {},
         _ = audit_anchor_worker.run() => {},
         _ = release_eval_worker.run() => {},
+        _ = conflict_worker.run() => {},
+        _ = delivery_worker.run() => {},
     }
 
     Ok(())
