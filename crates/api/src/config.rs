@@ -20,8 +20,8 @@ pub struct Config {
     pub opaque_server_setup_b64: String,
     pub jwt_secret: String,
     pub supabase_url: String,
-    pub supabase_anon_key: String,
-    pub supabase_service_role_key: String,
+    pub supabase_publishable_key: String,
+    pub supabase_secret_key: String,
     pub server_hmac_secret: String,
     pub brevo_api_key: String,
     pub brevo_invite_template_id: String,
@@ -82,10 +82,10 @@ impl Config {
             .map_err(|_| ConfigError::MissingVar("JWT_SECRET"))?;
         let supabase_url = env::var("SUPABASE_URL")
             .map_err(|_| ConfigError::MissingVar("SUPABASE_URL"))?;
-        let supabase_anon_key = env::var("SUPABASE_ANON_KEY")
-            .map_err(|_| ConfigError::MissingVar("SUPABASE_ANON_KEY"))?;
-        let supabase_service_role_key = env::var("SUPABASE_SERVICE_ROLE_KEY")
-            .map_err(|_| ConfigError::MissingVar("SUPABASE_SERVICE_ROLE_KEY"))?;
+        let supabase_publishable_key = env::var("SUPABASE_PUBLISHABLE_KEY")
+            .map_err(|_| ConfigError::MissingVar("SUPABASE_PUBLISHABLE_KEY"))?;
+        let supabase_secret_key = env::var("SUPABASE_SECRET_KEY")
+            .map_err(|_| ConfigError::MissingVar("SUPABASE_SECRET_KEY"))?;
         let server_hmac_secret = env::var("SERVER_HMAC_SECRET")
             .map_err(|_| ConfigError::MissingVar("SERVER_HMAC_SECRET"))?;
         let brevo_api_key = env::var("BREVO_API_KEY")
@@ -111,8 +111,8 @@ impl Config {
             opaque_server_setup_b64,
             jwt_secret,
             supabase_url,
-            supabase_anon_key,
-            supabase_service_role_key,
+            supabase_publishable_key,
+            supabase_secret_key,
             server_hmac_secret,
             brevo_api_key,
             brevo_invite_template_id,

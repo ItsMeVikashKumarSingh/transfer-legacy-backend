@@ -33,8 +33,8 @@ pub async fn send_password_recovery(config: &Config, email: &str) -> Result<(), 
     let url = format!("{}/auth/v1/recover", config.supabase_url);
     let res = client
         .post(url)
-        .header("apikey", config.supabase_anon_key.as_str())
-        .header("Authorization", format!("Bearer {}", config.supabase_anon_key))
+        .header("apikey", config.supabase_publishable_key.as_str())
+        .header("Authorization", format!("Bearer {}", config.supabase_publishable_key))
         .json(&RecoverRequest { email })
         .send()
         .await
@@ -55,8 +55,8 @@ pub async fn refresh_session(
     let url = format!("{}/auth/v1/token?grant_type=refresh_token", config.supabase_url);
     let res = client
         .post(url)
-        .header("apikey", config.supabase_anon_key.as_str())
-        .header("Authorization", format!("Bearer {}", config.supabase_anon_key))
+        .header("apikey", config.supabase_publishable_key.as_str())
+        .header("Authorization", format!("Bearer {}", config.supabase_publishable_key))
         .json(&RefreshRequest { refresh_token })
         .send()
         .await
@@ -74,7 +74,7 @@ pub async fn logout_session(config: &Config, access_token: &str) -> Result<(), S
     let url = format!("{}/auth/v1/logout", config.supabase_url);
     let res = client
         .post(url)
-        .header("apikey", config.supabase_anon_key.as_str())
+        .header("apikey", config.supabase_publishable_key.as_str())
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .await
@@ -96,7 +96,7 @@ pub async fn reset_password_with_token(
     let url = format!("{}/auth/v1/user", config.supabase_url);
     let res = client
         .put(url)
-        .header("apikey", config.supabase_anon_key.as_str())
+        .header("apikey", config.supabase_publishable_key.as_str())
         .header("Authorization", format!("Bearer {}", access_token))
         .json(&serde_json::json!({ "password": new_password }))
         .send()

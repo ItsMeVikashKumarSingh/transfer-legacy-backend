@@ -240,8 +240,8 @@ transfer-legacy/
 - [ ] Populate secrets at that path:
       ```
       SUPABASE_URL
-      SUPABASE_SERVICE_ROLE_KEY
-      SUPABASE_ANON_KEY
+      SUPABASE_SECRET_KEY
+      SUPABASE_PUBLISHABLE_KEY
       REDIS_URL
       OPENBAO_ADDR                   (http://127.0.0.1:8200)
       OPENBAO_TOKEN
