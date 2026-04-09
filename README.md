@@ -29,6 +29,18 @@ attestation workflows, and tamper-evident audit trails.
 - Run API and worker containers via Docker Compose (see `infra/`).
 - Internal-only endpoints (`/metrics`, `/v1/openapi.json`, `/v1/docs`) can be protected with `TL_INTERNAL_API_TOKEN`.
 
+## API Docs
+- Full endpoint reference: `docs/api/API_REFERENCE.md`
+- Postman collection: `postman/Transfer-Legacy.postman_collection.json`
+- Postman environment: `postman/Transfer-Legacy.postman_environment.json`
+- Internal routes require `x-internal-token` if `TL_INTERNAL_API_TOKEN` is configured.
+
+## Postman Quick Start
+1. Import `postman/Transfer-Legacy.postman_collection.json`.
+2. Import `postman/Transfer-Legacy.postman_environment.json`.
+3. Set environment values like `baseUrl`, `xIdempotencyKey`, `xSeq`, `xTimestamp`, `deviceId`, and auth tokens.
+4. For AEAD-protected routes, send encrypted payload envelope fields: `nonce` and `ciphertext`.
+
 ## Security & Compliance
 - Audit events are append-only and chain-verified.
 - All signing uses OpenBao Transit (no cloud KMS dependency).
