@@ -6,8 +6,6 @@
 .env.*
 !.env.example
 .DS_Store
-/.cargo
-/.github
 /.cargo-home
 /.semgrep
 /dist

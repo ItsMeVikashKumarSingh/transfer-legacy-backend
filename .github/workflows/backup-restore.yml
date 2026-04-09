@@ -1,0 +1,45 @@
+name: Backup Restore Check
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nightly backup
+        run: sh infra/scripts/backup.sh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENBAO_ADDR: ${{ secrets.OPENBAO_ADDR }}
+          OPENBAO_TOKEN: ${{ secrets.OPENBAO_TOKEN }}
+          OPENBAO_BACKUP_KEY_PATH: ${{ secrets.OPENBAO_BACKUP_KEY_PATH }}
+          OPENBAO_BACKUP_KEY_FIELD: ${{ secrets.OPENBAO_BACKUP_KEY_FIELD }}
+          BACKBLAZE_B2_BACKUP_BUCKET_NAME: ${{ secrets.BACKBLAZE_B2_BACKUP_BUCKET_NAME }}
+          BACKBLAZE_B2_KEY_ID: ${{ secrets.BACKBLAZE_B2_KEY_ID }}
+          BACKBLAZE_B2_APP_KEY: ${{ secrets.BACKBLAZE_B2_APP_KEY }}
+          BACKBLAZE_B2_ENDPOINT_URL: ${{ secrets.BACKBLAZE_B2_ENDPOINT_URL }}
+
+  restore-test:
+    if: github.event.schedule == '0 4 * * 0' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: backup
+    steps:
+      - uses: actions/checkout@v4
+      - name: Weekly restore test
+        run: sh infra/scripts/restore-test.sh
+        env:
+          BACKUP_DATE: ${{ github.event.inputs.backup_date }}
+          OPENBAO_ADDR: ${{ secrets.OPENBAO_ADDR }}
+          OPENBAO_TOKEN: ${{ secrets.OPENBAO_TOKEN }}
+          OPENBAO_BACKUP_KEY_PATH: ${{ secrets.OPENBAO_BACKUP_KEY_PATH }}
+          OPENBAO_BACKUP_KEY_FIELD: ${{ secrets.OPENBAO_BACKUP_KEY_FIELD }}
+          BACKBLAZE_B2_BACKUP_BUCKET_NAME: ${{ secrets.BACKBLAZE_B2_BACKUP_BUCKET_NAME }}
+          BACKBLAZE_B2_KEY_ID: ${{ secrets.BACKBLAZE_B2_KEY_ID }}
+          BACKBLAZE_B2_APP_KEY: ${{ secrets.BACKBLAZE_B2_APP_KEY }}
+          BACKBLAZE_B2_ENDPOINT_URL: ${{ secrets.BACKBLAZE_B2_ENDPOINT_URL }}

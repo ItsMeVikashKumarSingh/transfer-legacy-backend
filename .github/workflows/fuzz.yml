@@ -1,0 +1,23 @@
+name: Fuzz
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 6"
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.77.2
+      - uses: taiki-e/install-action@cargo-fuzz
+      - name: Fuzz envelope parsing (1h)
+        run: cargo fuzz run --manifest-path crates/crypto-core/fuzz/Cargo.toml fuzz_envelope_parsing -- -max_total_time=3600
+      - name: Fuzz JCS canonicalization (1h)
+        run: cargo fuzz run --manifest-path crates/crypto-core/fuzz/Cargo.toml fuzz_jcs_canonicalization -- -max_total_time=3600
+      - name: Fuzz AEAD decrypt (1h)
+        run: cargo fuzz run --manifest-path crates/crypto-core/fuzz/Cargo.toml fuzz_aead_decrypt -- -max_total_time=3600
