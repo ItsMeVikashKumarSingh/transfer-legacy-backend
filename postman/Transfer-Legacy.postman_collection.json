@@ -1,0 +1,216 @@
+{
+  "info": {
+    "_postman_id": "7fd82b11-f7cf-4a53-9a56-7e728665bea3",
+    "name": "Transfer Legacy API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Full API collection for Transfer Legacy routes from crates/api/src/router.rs."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "{{baseUrl}}" },
+    { "key": "bearerToken", "value": "{{bearerToken}}" },
+    { "key": "internalToken", "value": "{{internalToken}}" },
+    { "key": "policyId", "value": "{{policyId}}" },
+    { "key": "reviewId", "value": "{{reviewId}}" },
+    { "key": "deviceId", "value": "{{deviceId}}" }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Server Capabilities",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/server-capabilities"
+          }
+        },
+        {
+          "name": "Metrics (Internal)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-internal-token", "value": "{{internalToken}}" }],
+            "url": "{{baseUrl}}/metrics"
+          }
+        },
+        {
+          "name": "OpenAPI (Internal)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-internal-token", "value": "{{internalToken}}" }],
+            "url": "{{baseUrl}}/v1/openapi.json"
+          }
+        },
+        {
+          "name": "Docs UI (Internal)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-internal-token", "value": "{{internalToken}}" }],
+            "url": "{{baseUrl}}/v1/docs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Init",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"registration_request\": \"base64-registration-request\",\n  \"credential_identifier\": \"user@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/auth/register/init"
+          }
+        },
+        {
+          "name": "Register Finish (AEAD)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-seq", "value": "{{xSeq}}" },
+              { "key": "x-timestamp", "value": "{{xTimestamp}}" },
+              { "key": "x-device-id", "value": "{{deviceId}}" },
+              { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" },
+            "url": "{{baseUrl}}/v1/auth/register/finish"
+          }
+        },
+        {
+          "name": "Login Init",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"credential_request\": \"base64-credential-request\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/auth/login/init"
+          }
+        },
+        {
+          "name": "Login Finish (AEAD)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-seq", "value": "{{xSeq}}" },
+              { "key": "x-timestamp", "value": "{{xTimestamp}}" },
+              { "key": "x-device-id", "value": "{{deviceId}}" },
+              { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" },
+            "url": "{{baseUrl}}/v1/auth/login/finish"
+          }
+        },
+        { "name": "Logout", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }], "url": "{{baseUrl}}/v1/auth/logout" } },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"refresh-token\"\n}" },
+            "url": "{{baseUrl}}/v1/auth/refresh"
+          }
+        },
+        {
+          "name": "Password Reset Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "url": "{{baseUrl}}/v1/auth/password/reset/request"
+          }
+        },
+        {
+          "name": "Password Reset Confirm",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"access_token\": \"token\",\n  \"new_password\": \"new-password\"\n}" },
+            "url": "{{baseUrl}}/v1/auth/password/reset/confirm"
+          }
+        },
+        { "name": "MFA TOTP Enroll", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\"\n}" }, "url": "{{baseUrl}}/v1/auth/mfa/totp/enroll" } },
+        { "name": "MFA TOTP Verify", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"code\": \"123456\"\n}" }, "url": "{{baseUrl}}/v1/auth/mfa/totp/verify" } },
+        { "name": "WebAuthn Register Start", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\"\n}" }, "url": "{{baseUrl}}/v1/auth/mfa/webauthn/register/start" } },
+        { "name": "WebAuthn Register Finish", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"credential\": {}\n}" }, "url": "{{baseUrl}}/v1/auth/mfa/webauthn/register/finish" } },
+        { "name": "WebAuthn Authenticate Start", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\"\n}" }, "url": "{{baseUrl}}/v1/auth/mfa/webauthn/authenticate/start" } },
+        { "name": "WebAuthn Authenticate Finish", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"assertion\": {}\n}" }, "url": "{{baseUrl}}/v1/auth/mfa/webauthn/authenticate/finish" } },
+        { "name": "StepUp Request", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"action\": \"policy_update\",\n  \"challenge_type\": \"totp\"\n}" }, "url": "{{baseUrl}}/v1/auth/stepup/request" } },
+        { "name": "StepUp Verify", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"challenge_id\": \"00000000-0000-0000-0000-000000000002\",\n  \"code\": \"123456\"\n}" }, "url": "{{baseUrl}}/v1/auth/stepup/verify" } }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        { "name": "Register Device (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/devices/register" } },
+        { "name": "List Devices (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/devices/" } },
+        { "name": "Revoke Device (AEAD)", "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/devices/{{deviceId}}" } }
+      ]
+    },
+    {
+      "name": "Vault",
+      "item": [
+        { "name": "Create Item (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/items" } },
+        { "name": "List Items (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/items/list" } },
+        { "name": "Get Item (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/items/get" } },
+        { "name": "Delete Item (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/items/delete" } },
+        { "name": "Create Share (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/shares" } },
+        { "name": "List Shares (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/shares/list" } },
+        { "name": "Revoke Share (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/shares/revoke" } },
+        { "name": "Migrate Crypto (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/vault/migrate" } }
+      ]
+    },
+    {
+      "name": "Inheritance",
+      "item": [
+        { "name": "Upsert Policy (AEAD)", "request": { "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/inheritance/policy" } },
+        { "name": "Heartbeat (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/inheritance/heartbeat" } },
+        { "name": "Create Invite (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/inheritance/policy/{{policyId}}/invite" } },
+        { "name": "Consume Claim Token (AEAD)", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/inheritance/claim-token/consume" } },
+        { "name": "List Envelopes", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }], "url": "{{baseUrl}}/v1/inheritance/envelopes?policy_id={{policyId}}" } },
+        { "name": "Create Evidence Package (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/inheritance/evidence-package" } }
+      ]
+    },
+    {
+      "name": "Claims",
+      "item": [
+        { "name": "Initiate Claim (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/claims/initiate" } },
+        { "name": "Confirm Claim (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/claims/confirm" } },
+        { "name": "Presign Attachment (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/claims/attachments/presign" } },
+        { "name": "Confirm Attachment (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/claims/attachments/confirm" } },
+        { "name": "Submit Attestation (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/claims/attestations" } },
+        { "name": "Create Release Record (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/claims/release-records" } }
+      ]
+    },
+    {
+      "name": "Audit / GDPR / Ops",
+      "item": [
+        { "name": "Audit Chain", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }], "url": "{{baseUrl}}/v1/audit/chain?policy_id={{policyId}}" } },
+        { "name": "GDPR Export (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/gdpr/export" } },
+        { "name": "GDPR Erase (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/gdpr/erase" } },
+        { "name": "Ops List Reviews", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }], "url": "{{baseUrl}}/v1/ops/reviews?status=open" } },
+        { "name": "Ops Get Review", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }], "url": "{{baseUrl}}/v1/ops/reviews/{{reviewId}}" } },
+        { "name": "Ops Review Decision (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/ops/reviews/{{reviewId}}/decision" } }
+      ]
+    }
+  ]
+}
