@@ -44,7 +44,10 @@ pub async fn totp_enroll(
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
     let secret = Secret::generate_secret();
-    let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret.to_bytes().to_vec(), Some("Transfer Legacy".into()), payload.user_id.to_string())
+    let secret_bytes = secret
+        .to_bytes()
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret_bytes.clone(), Some("Transfer Legacy".into()), payload.user_id.to_string())
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let otpauth_url = totp.get_url();
 
@@ -52,7 +55,7 @@ pub async fn totp_enroll(
         .decode(state.config.server_aead_key_b64.as_str())
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let aad = payload.user_id.as_bytes();
-    let enc = encrypt(&key, &secret.to_bytes(), aad)
+    let enc = encrypt(&key, &secret_bytes, aad)
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let mut secret_enc = enc.nonce;
     secret_enc.extend_from_slice(&enc.ciphertext);

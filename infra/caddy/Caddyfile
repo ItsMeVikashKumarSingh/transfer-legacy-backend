@@ -1,4 +1,6 @@
 {$PUBLIC_HOST} {
+    @internal path /metrics /v1/openapi.json /v1/docs
+    respond @internal 404
     reverse_proxy api:8080
     encode gzip
 }

@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use metrics::counter;
 use serde::Serialize;
 use tower_http::request_id::RequestId;
 
@@ -43,7 +44,7 @@ pub struct SuccessEnvelope<T> {
 pub fn success<T: Serialize>(request_id: &RequestId, data: T) -> Json<SuccessEnvelope<T>> {
     Json(SuccessEnvelope {
         data,
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     })
 }
 
@@ -53,7 +54,7 @@ impl ApiError {
     }
 
     pub fn app_with_request_id(err: AppError, request_id: &RequestId) -> Self {
-        ApiError::AppWithRequestId(err, request_id.to_string())
+        ApiError::AppWithRequestId(err, crate::middleware::request_id::request_id_string(&request_id))
     }
 }
 
@@ -72,6 +73,17 @@ impl IntoResponse for ApiError {
                 request_id,
             },
         };
+
+        counter!(
+            "api_errors_total",
+            "route" => "app",
+            "error_code" => app_error.code().to_string()
+        )
+        .increment(1);
+
+        if matches!(app_error, AppError::AeadIntegrity) {
+            counter!("aead_failures_total", "reason" => "integrity").increment(1);
+        }
 
         (status, Json(body)).into_response()
     }

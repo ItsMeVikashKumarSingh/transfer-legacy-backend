@@ -1,10 +1,10 @@
 use axum::{routing::{get, post, put, delete}, Router};
 use axum::http::{HeaderName, HeaderValue, Method};
+use axum::middleware::from_fn;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::cors::{CorsLayer, AllowOrigin};
-use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::request_id::{MakeRequestUuid, RequestIdLayer};
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
@@ -48,10 +48,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
     let middleware_stack = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(Duration::from_secs(30)))
-        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(cors)
         .layer(security_headers)
-        .layer(RequestIdLayer::new(HeaderName::from_static("x-request-id"), MakeRequestUuid))
+        .layer(PropagateRequestIdLayer::new(HeaderName::from_static("x-request-id")))
+        .layer(SetRequestIdLayer::new(HeaderName::from_static("x-request-id"), MakeRequestUuid))
         .layer(crate::middleware::sentry_layer::SentryLayer::new());
 
     let auth_routes = Router::new()
@@ -110,9 +110,17 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/export", post(crate::handlers::gdpr::export_gdpr))
         .route("/erase", post(crate::handlers::gdpr::erase_gdpr));
 
+    let ops_routes = Router::new()
+        .route("/reviews", get(crate::handlers::ops::list_reviews))
+        .route("/reviews/:review_id", get(crate::handlers::ops::get_review))
+        .route("/reviews/:review_id/decision", post(crate::handlers::ops::review_decision));
+
     Router::new()
         .route("/health", get(health))
+        .route("/metrics", get(crate::handlers::metrics::metrics))
         .route("/v1/server-capabilities", get(capabilities))
+        .route("/v1/openapi.json", get(crate::handlers::openapi::openapi_json))
+        .route("/v1/docs", get(crate::handlers::openapi::docs_ui))
         .nest("/v1/auth", auth_routes)
         .nest("/v1/devices", device_routes)
         .nest("/v1/vault", vault_routes)
@@ -120,6 +128,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .nest("/v1/claims", claims_routes)
         .nest("/v1/audit", audit_routes)
         .nest("/v1/gdpr", gdpr_routes)
+        .nest("/v1/ops", ops_routes)
         .with_state(state)
+        .layer(from_fn(crate::middleware::metrics::metrics_middleware))
         .layer(middleware_stack)
 }

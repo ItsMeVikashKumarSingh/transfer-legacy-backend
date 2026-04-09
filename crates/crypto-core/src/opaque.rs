@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use opaque_ke::{
-    ciphersuite::Default as DefaultSuite,
+    ciphersuite::CipherSuite,
     CredentialRequest,
     CredentialResponse,
     RegistrationRequest,
@@ -8,10 +8,20 @@ use opaque_ke::{
     RegistrationUpload,
     ServerLogin,
     ServerLoginStartResult,
+    ServerLoginParameters,
     ServerRegistration,
     ServerSetup,
 };
 use rand::rngs::OsRng;
+use sha2::Sha512;
+
+pub struct DefaultSuite;
+
+impl CipherSuite for DefaultSuite {
+    type OprfCs = opaque_ke::Ristretto255;
+    type KeyExchange = opaque_ke::TripleDh<opaque_ke::Ristretto255, Sha512>;
+    type Ksf = opaque_ke::ksf::Identity;
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum OpaqueError {
@@ -51,15 +61,14 @@ pub fn registration_start(
         .map_err(|_| OpaqueError::Base64)?;
     let req = RegistrationRequest::<DefaultSuite>::deserialize(&req_bytes)
         .map_err(|_| OpaqueError::Serialization)?;
-    let mut rng = OsRng;
-    let resp = ServerRegistration::start(&mut rng, req.clone(), setup)
+    let resp = ServerRegistration::start(setup, req.clone(), b"")
         .map_err(|_| OpaqueError::Protocol)?;
     let resp_bytes = resp.message.serialize();
     Ok((URL_SAFE_NO_PAD.encode(resp_bytes), req))
 }
 
 pub fn registration_finish(
-    setup: &OpaqueServerSetup,
+    _setup: &OpaqueServerSetup,
     registration_upload_b64: &str,
 ) -> Result<Vec<u8>, OpaqueError> {
     let upload_bytes = URL_SAFE_NO_PAD
@@ -67,9 +76,8 @@ pub fn registration_finish(
         .map_err(|_| OpaqueError::Base64)?;
     let upload = RegistrationUpload::<DefaultSuite>::deserialize(&upload_bytes)
         .map_err(|_| OpaqueError::Serialization)?;
-    let password_file = ServerRegistration::finish(upload, setup)
-        .map_err(|_| OpaqueError::Protocol)?;
-    Ok(password_file.serialize())
+    let password_file = ServerRegistration::finish(upload);
+    Ok(password_file.serialize().to_vec())
 }
 
 pub fn login_start(
@@ -85,8 +93,9 @@ pub fn login_start(
     let password_file = opaque_ke::ServerRegistration::<DefaultSuite>::deserialize(password_file)
         .map_err(|_| OpaqueError::Serialization)?;
     let mut rng = OsRng;
+    let params = ServerLoginParameters::default();
     let ServerLoginStartResult { message, state } =
-        ServerLogin::start(&mut rng, setup, password_file, req)
+        ServerLogin::start(&mut rng, setup, Some(password_file), req, b"", params)
             .map_err(|_| OpaqueError::Protocol)?;
     let resp_bytes = message.serialize();
     Ok((URL_SAFE_NO_PAD.encode(resp_bytes), state))
@@ -102,7 +111,7 @@ pub fn login_finish(
     let fin = opaque_ke::CredentialFinalization::<DefaultSuite>::deserialize(&fin_bytes)
         .map_err(|_| OpaqueError::Serialization)?;
     state
-        .finish(fin)
+        .finish(fin, ServerLoginParameters::default())
         .map_err(|_| OpaqueError::Protocol)?;
     Ok(())
 }

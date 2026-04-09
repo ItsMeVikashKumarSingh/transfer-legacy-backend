@@ -147,7 +147,7 @@ pub async fn upsert_policy(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: PolicyUpsertResponse { policy_id, pending_at, grace_deadline },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

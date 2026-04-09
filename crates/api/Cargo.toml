@@ -16,7 +16,7 @@ tower = "0.4"
 tower-http = { version = "0.5", features = ["trace", "timeout", "request-id", "cors", "limit", "set-header"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 hyper = "1"
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres"] }
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json"] }
 redis = { version = "0.25", features = ["tokio-comp"] }
 base64 = "0.22"
 bytes = "1"
@@ -25,12 +25,14 @@ jsonwebtoken = "9"
 time = { version = "0.3", features = ["formatting"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 chrono = { version = "0.4", features = ["serde"] }
-totp-rs = "5"
+totp-rs = { version = "5", features = ["otpauth", "gen_secret"] }
 rand = "0.8"
 hmac = "0.12"
 sha2 = "0.10"
 aws-config = "1"
 aws-sdk-s3 = "1"
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }

@@ -1,0 +1,41 @@
+groups:
+  - name: transfer-legacy-critical
+    rules:
+      - alert: ServerDecryptAttempt
+        expr: increase(server_decrypt_attempts_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server decrypt attempt detected"
+      - alert: NonceReuseDetected
+        expr: increase(nonce_reuse_detected_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Replay/nonce reuse detected"
+
+  - name: transfer-legacy-warning
+    rules:
+      - alert: AeadFailuresHigh
+        expr: sum(rate(aead_failures_total[1m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AEAD failures above threshold"
+      - alert: HeartbeatWorkerLagHigh
+        expr: max(heartbeat_worker_lag_seconds) > 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Heartbeat worker lag exceeds 1 hour"
+      - alert: QueueDepthHigh
+        expr: max(job_queue_depth) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker queue depth high"

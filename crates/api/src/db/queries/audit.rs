@@ -34,7 +34,7 @@ pub async fn insert_audit_event(
     .bind(event_hash)
     .bind(actor_id)
     .bind(ip_hash)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     Ok(())
@@ -48,7 +48,7 @@ pub async fn fetch_policy_audit_head(
         "SELECT audit_head_hash FROM inheritance.policies WHERE policy_id = $1",
     )
     .bind(policy_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await?;
     Ok(row)
 }
@@ -63,7 +63,7 @@ pub async fn update_policy_audit_head(
     )
     .bind(audit_head_hash)
     .bind(policy_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }

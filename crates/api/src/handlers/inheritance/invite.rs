@@ -103,7 +103,7 @@ pub async fn create_invite(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: InviteResponse { invite_id, expires_at },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

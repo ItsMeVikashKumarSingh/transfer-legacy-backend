@@ -19,7 +19,8 @@ struct EmailAddress<'a> {
 #[derive(Serialize)]
 struct SendTemplateRequest<'a> {
     to: Vec<EmailAddress<'a>>,
-    templateId: i64,
+    #[serde(rename = "templateId")]
+    template_id: i64,
     params: serde_json::Value,
 }
 
@@ -40,7 +41,7 @@ pub async fn send_invite_email(
 
     let payload = SendTemplateRequest {
         to: vec![EmailAddress { email }],
-        templateId: template_id,
+        template_id,
         params: serde_json::json!({
             "brand_name": config.brand_name,
             "app_url": config.app_url,

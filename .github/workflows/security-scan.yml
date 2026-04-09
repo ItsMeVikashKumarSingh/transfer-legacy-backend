@@ -20,6 +20,17 @@ jobs:
       - name: Semgrep
         uses: returntocorp/semgrep-action@v1
         with:
-          config: p/ci
+          config: |
+            p/ci
+            .semgrep/rules.yml
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
+      - name: Build Runtime Image
+        run: docker build -f infra/Dockerfile --build-arg BIN_NAME=transfer-legacy-api -t transfer-legacy-api:scan .
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: transfer-legacy-api:scan
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL

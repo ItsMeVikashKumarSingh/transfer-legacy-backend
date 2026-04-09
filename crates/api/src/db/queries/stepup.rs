@@ -69,7 +69,7 @@ pub async fn fetch_stepup_challenge_tx(
         "SELECT challenge_id, user_id, challenge_type, action, expires_at, consumed_at FROM auth_ext.stepup_challenges WHERE challenge_id = $1 FOR UPDATE",
     )
     .bind(challenge_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await?;
 
     Ok(StepUpRow {
@@ -90,7 +90,7 @@ pub async fn consume_stepup_challenge_tx(
         "UPDATE auth_ext.stepup_challenges SET consumed_at = now() WHERE challenge_id = $1",
     )
     .bind(challenge_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }

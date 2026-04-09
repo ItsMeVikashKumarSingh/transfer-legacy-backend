@@ -1,0 +1,53 @@
+{
+  "title": "Transfer Legacy - Ops",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "API p99 Duration",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(api_request_duration_seconds_bucket[5m])) by (le, route))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "AEAD Failures / min",
+      "targets": [
+        {
+          "expr": "sum(rate(aead_failures_total[1m]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Server Decrypt Attempts",
+      "targets": [
+        {
+          "expr": "sum(increase(server_decrypt_attempts_total[5m]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker Heartbeat Lag",
+      "targets": [
+        {
+          "expr": "max(heartbeat_worker_lag_seconds)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue Depth",
+      "targets": [
+        {
+          "expr": "max(job_queue_depth) by (job_type)"
+        }
+      ]
+    }
+  ]
+}

@@ -30,7 +30,7 @@ pub async fn insert_claim_tx(
     .bind(claim_type)
     .bind(status)
     .bind(confirmation_deadline)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(claim_id)
 }
@@ -43,7 +43,7 @@ pub async fn fetch_claim_for_update_tx(
         "SELECT claim_id, policy_id, claimant_person_id, claim_type::text, status::text, confirmation_deadline FROM inheritance.claims WHERE claim_id = $1 FOR UPDATE",
     )
     .bind(claim_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await?;
 
     Ok(ClaimRow {
@@ -68,7 +68,7 @@ pub async fn update_claim_status_tx(
     .bind(status)
     .bind(confirmed_at)
     .bind(claim_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }
@@ -85,7 +85,7 @@ pub async fn insert_attachment_tx(
     .bind(attachment_id)
     .bind(claim_id)
     .bind(object_key)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }
@@ -104,7 +104,7 @@ pub async fn confirm_attachment_tx(
     .bind(size_bytes)
     .bind(mime_type)
     .bind(attachment_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }
@@ -117,7 +117,7 @@ pub async fn fetch_attachment_policy_tx(
         "SELECT ca.claim_id, c.policy_id FROM inheritance.claim_attachments ca JOIN inheritance.claims c ON c.claim_id = ca.claim_id WHERE ca.attachment_id = $1 FOR UPDATE",
     )
     .bind(attachment_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await?;
     Ok(row)
 }
@@ -142,7 +142,7 @@ pub async fn insert_attestation_tx(
     .bind(statement)
     .bind(signature)
     .bind(signature_type)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(attestation_id)
 }
@@ -167,7 +167,7 @@ pub async fn insert_release_record_tx(
     .bind(signature)
     .bind(schema_version)
     .bind(crypto_version)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(release_id)
 }

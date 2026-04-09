@@ -54,7 +54,7 @@ pub async fn insert_invite_tx(
     .bind(role)
     .bind(claim_token_hmac)
     .bind(expires_at)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }
@@ -67,7 +67,7 @@ pub async fn fetch_invite_for_update(
         "SELECT invite_id, policy_id, email, role, claim_token_hmac, expires_at, used FROM notify.invites WHERE invite_id = $1 FOR UPDATE",
     )
     .bind(invite_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await?;
 
     Ok(InviteRow {
@@ -89,7 +89,7 @@ pub async fn mark_invite_used(
         "UPDATE notify.invites SET used = true, used_at = now() WHERE invite_id = $1",
     )
     .bind(invite_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }

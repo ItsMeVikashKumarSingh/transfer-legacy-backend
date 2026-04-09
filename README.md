@@ -27,12 +27,28 @@ attestation workflows, and tamper-evident audit trails.
 ## Local Setup (Development)
 - Configure `.env.local` with required variables.
 - Run API and worker containers via Docker Compose (see `infra/`).
+- Internal-only endpoints (`/metrics`, `/v1/openapi.json`, `/v1/docs`) can be protected with `TL_INTERNAL_API_TOKEN`.
 
 ## Security & Compliance
 - Audit events are append-only and chain-verified.
 - All signing uses OpenBao Transit (no cloud KMS dependency).
 - B2 is used for encrypted attachments and audit anchors.
+- Security scans run via GitHub Actions (`cargo deny`, `cargo audit`, semgrep, gitleaks, trivy).
+- Fuzz harnesses are defined under `crates/crypto-core/fuzz`.
+
+## Operations
+- Runbooks:
+  - `docs/runbooks/incident-response.md`
+  - `docs/runbooks/manual-review-ops.md`
+  - `docs/runbooks/backup-restore.md`
+- Observability assets:
+  - `docs/observability/grafana-dashboard.json`
+  - `docs/observability/alerts.yaml`
+- Load test profiles:
+  - `infra/k6/auth.js`
+  - `infra/k6/vault-write.js`
+  - `infra/k6/heartbeat.js`
 
 ## Status
-Implementation is complete through Phase 7. Acceptance tests and infra
-verification are still pending per the development plan.
+Implementation is in progress through Phases 8-10, with acceptance validation
+driven by `DEVELOPMENT_PLAN.md` checklists and CI workflows.

@@ -17,6 +17,8 @@ pub struct Config {
     pub b2_key_id: String,
     pub b2_app_key: String,
     pub b2_bucket_name: String,
+    pub b2_audit_bucket_name: String,
+    pub b2_backup_bucket_name: String,
     pub b2_endpoint_url: String,
     pub app_url: String,
     pub brand_name: String,
@@ -61,6 +63,10 @@ impl Config {
                 .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_APP_KEY"))?,
             b2_bucket_name: env::var("BACKBLAZE_B2_BUCKET_NAME")
                 .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_BUCKET_NAME"))?,
+            b2_audit_bucket_name: env::var("BACKBLAZE_B2_AUDIT_BUCKET_NAME")
+                .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_AUDIT_BUCKET_NAME"))?,
+            b2_backup_bucket_name: env::var("BACKBLAZE_B2_BACKUP_BUCKET_NAME")
+                .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_BACKUP_BUCKET_NAME"))?,
             b2_endpoint_url: env::var("BACKBLAZE_B2_ENDPOINT_URL")
                 .map_err(|_| ConfigError::MissingVar("BACKBLAZE_B2_ENDPOINT_URL"))?,
             app_url: env::var("TL_APP_URL").map_err(|_| ConfigError::MissingVar("TL_APP_URL"))?,

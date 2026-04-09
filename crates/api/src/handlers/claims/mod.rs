@@ -3,7 +3,9 @@ use axum::http::HeaderMap;
 use axum::Json;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{Duration, Utc};
+use metrics::histogram;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use uuid::Uuid;
 
 use crate::db::queries::claims::{
@@ -18,6 +20,27 @@ use crate::middleware::rate_limit::require_idempotency;
 use crate::services::{audit, b2, openbao};
 use crate::state::AppState;
 use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize, signatures::verify_ed25519};
+
+struct ClaimLatency {
+    route: &'static str,
+    start: Instant,
+}
+
+impl ClaimLatency {
+    fn start(route: &'static str) -> Self {
+        Self {
+            route,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Drop for ClaimLatency {
+    fn drop(&mut self) {
+        histogram!("claim_processing_duration_seconds", "route" => self.route.to_string())
+            .record(self.start.elapsed().as_secs_f64());
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ClaimInitiateRequest {
@@ -38,6 +61,7 @@ pub async fn initiate_claim(
     headers: HeaderMap,
     AeadJson(payload): AeadJson<ClaimInitiateRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let _latency = ClaimLatency::start("initiate_claim");
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
@@ -77,7 +101,7 @@ pub async fn initiate_claim(
     if status == "confirmed" {
         sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
             .bind(payload.policy_id)
-            .execute(&mut *tx)
+            .execute(tx.as_mut())
             .await
             .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     }
@@ -100,7 +124,7 @@ pub async fn initiate_claim(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ClaimInitiateResponse { claim_id, confirmation_deadline },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -123,6 +147,7 @@ pub async fn confirm_claim(
     headers: HeaderMap,
     AeadJson(payload): AeadJson<ClaimConfirmRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let _latency = ClaimLatency::start("confirm_claim");
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
@@ -158,7 +183,7 @@ pub async fn confirm_claim(
 
     sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
         .bind(claim.policy_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -177,7 +202,7 @@ pub async fn confirm_claim(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ClaimConfirmResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -202,6 +227,7 @@ pub async fn presign_attachment(
     headers: HeaderMap,
     AeadJson(payload): AeadJson<PresignAttachmentRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let _latency = ClaimLatency::start("submit_attestation");
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
@@ -224,7 +250,7 @@ pub async fn presign_attachment(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: PresignAttachmentResponse { attachment_id, upload_url, object_key },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -249,6 +275,7 @@ pub async fn confirm_attachment(
     headers: HeaderMap,
     AeadJson(payload): AeadJson<ConfirmAttachmentRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let _latency = ClaimLatency::start("create_release_record");
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
@@ -283,7 +310,7 @@ pub async fn confirm_attachment(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ConfirmAttachmentResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -387,7 +414,7 @@ pub async fn submit_attestation(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: AttestationResponse { attestation_id },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -455,7 +482,7 @@ pub async fn create_release_record(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ReleaseRecordResponse { release_id, signature },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

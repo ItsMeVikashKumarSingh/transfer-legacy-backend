@@ -61,11 +61,8 @@ pub async fn heartbeat(
     verify_ed25519(&pubkey, &digest, &sig)
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::SignatureInvalid, &request_id))?;
 
-    let ts = chrono::DateTime::<chrono::Utc>::from_utc(
-        chrono::NaiveDateTime::from_timestamp_opt(payload.ts, 0)
-            .ok_or_else(|| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &request_id))?,
-        chrono::Utc,
-    );
+    let ts = chrono::DateTime::from_timestamp(payload.ts, 0)
+        .ok_or_else(|| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &request_id))?;
 
     let pending_at = match policy.cadence.as_str() {
         "1w" => ts + Duration::days(7),
@@ -115,7 +112,7 @@ pub async fn heartbeat(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: HeartbeatResponse { policy_id: payload.policy_id, pending_at, grace_deadline, status: new_status.to_string() },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

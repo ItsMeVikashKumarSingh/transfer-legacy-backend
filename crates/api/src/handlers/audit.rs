@@ -86,7 +86,7 @@ pub async fn audit_chain(
             invalid_at,
             events: response_events,
         },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

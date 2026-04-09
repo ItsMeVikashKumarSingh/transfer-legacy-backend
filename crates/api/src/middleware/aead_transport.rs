@@ -3,6 +3,7 @@ use axum::body::Body;
 use axum::extract::{FromRequest, Request};
 use axum::http::HeaderMap;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use metrics::counter;
 use redis::AsyncCommands;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -126,10 +127,11 @@ async fn enforce_replay(state: &AppState, device_id: &str, seq: u64, ts: i64) ->
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| ApiError::app(AppError::ReplayOrSkew))?;
     let now_ts = now.as_secs() as i64;
     if (now_ts - ts).abs() > 300 {
+        counter!("aead_failures_total", "reason" => "clock_skew").increment(1);
         return Err(ApiError::app(AppError::ReplayOrSkew));
     }
 
-    let mut conn = state.redis.get_async_connection().await
+    let mut conn = state.redis.get_multiplexed_async_connection().await
         .map_err(|_| ApiError::app(AppError::Internal))?;
     let key = format!("seq:{}", device_id);
     let last: Option<u64> = conn.get(&key).await
@@ -137,6 +139,8 @@ async fn enforce_replay(state: &AppState, device_id: &str, seq: u64, ts: i64) ->
 
     if let Some(last_seq) = last {
         if seq <= last_seq {
+            counter!("nonce_reuse_detected_total").increment(1);
+            counter!("aead_failures_total", "reason" => "replay").increment(1);
             return Err(ApiError::app(AppError::ReplayDetected));
         }
     }

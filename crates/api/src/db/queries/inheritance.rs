@@ -55,7 +55,7 @@ pub async fn insert_policy_tx(
     .bind(grace_deadline)
     .bind(crypto_version)
     .bind(schema_version)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     Ok(policy_id)
@@ -87,7 +87,7 @@ pub async fn update_policy_tx(
     .bind(grace_deadline)
     .bind(policy_id)
     .bind(owner_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     if res.rows_affected() == 0 {
@@ -131,7 +131,7 @@ pub async fn fetch_policy_for_update_tx(
         "SELECT policy_id, owner_id, policy_type::text, cadence::text, m_of_n, beneficiaries, approvers, release_conditions, status::text, last_heartbeat_at, pending_at, grace_deadline, conflict_hold_until, audit_head_hash FROM inheritance.policies WHERE policy_id = $1 AND is_deleted = false FOR UPDATE",
     )
     .bind(policy_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await?;
 
     Ok(PolicyRow {
@@ -168,7 +168,7 @@ pub async fn update_policy_heartbeat_tx(
     .bind(grace_deadline)
     .bind(new_status)
     .bind(policy_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     Ok(())
@@ -188,7 +188,7 @@ pub async fn insert_heartbeat_tx(
     .bind(device_id)
     .bind(device_sig)
     .bind(ts)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }
@@ -205,7 +205,7 @@ pub async fn update_policy_participants(
     .bind(beneficiaries)
     .bind(approvers)
     .bind(policy_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
     Ok(())
 }

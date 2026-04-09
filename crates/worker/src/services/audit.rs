@@ -26,7 +26,7 @@ pub async fn append_event(
         "SELECT audit_head_hash FROM inheritance.policies WHERE policy_id = $1",
     )
     .bind(policy_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await
     .map_err(|_| AuditError::Database)?;
 
@@ -48,14 +48,14 @@ pub async fn append_event(
     .bind(payload_hash)
     .bind(prev_hash)
     .bind(event_hash.clone())
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await
     .map_err(|_| AuditError::Database)?;
 
     sqlx::query("UPDATE inheritance.policies SET audit_head_hash = $1 WHERE policy_id = $2")
         .bind(event_hash.clone())
         .bind(policy_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| AuditError::Database)?;
 

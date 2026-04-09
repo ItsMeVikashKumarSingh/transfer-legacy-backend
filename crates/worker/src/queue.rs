@@ -13,14 +13,15 @@ pub struct Queues {
 }
 
 impl Queues {
-    pub async fn connect(redis_url: &str) -> Result<Self, apalis_redis::RedisError> {
+    pub async fn connect(redis_url: &str) -> Result<Self, redis::RedisError> {
+        let conn = apalis_redis::connect(redis_url).await?;
         Ok(Self {
-            heartbeat_storage: RedisStorage::connect(redis_url).await?,
-            notify_storage: RedisStorage::connect(redis_url).await?,
-            audit_anchor_storage: RedisStorage::connect(redis_url).await?,
-            release_eval_storage: RedisStorage::connect(redis_url).await?,
-            conflict_check_storage: RedisStorage::connect(redis_url).await?,
-            release_delivery_storage: RedisStorage::connect(redis_url).await?,
+            heartbeat_storage: RedisStorage::new(conn.clone()),
+            notify_storage: RedisStorage::new(conn.clone()),
+            audit_anchor_storage: RedisStorage::new(conn.clone()),
+            release_eval_storage: RedisStorage::new(conn.clone()),
+            conflict_check_storage: RedisStorage::new(conn.clone()),
+            release_delivery_storage: RedisStorage::new(conn),
         })
     }
 }

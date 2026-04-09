@@ -41,7 +41,7 @@ pub async fn consume_claim_token(
 
     let _ = sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
         .bind(payload.invite_id.to_string())
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -107,7 +107,7 @@ pub async fn consume_claim_token(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ClaimTokenConsumeResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

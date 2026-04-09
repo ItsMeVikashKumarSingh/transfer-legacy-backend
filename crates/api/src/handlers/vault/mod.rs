@@ -160,7 +160,7 @@ pub async fn create_item(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: CreateItemResponse { item_id },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -188,7 +188,7 @@ pub async fn list_items_handler(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ListItemsResponse { items: list },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -211,7 +211,7 @@ pub async fn get_item_handler(
             item_meta: item.item_meta,
             created_at: item.created_at,
         },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -233,7 +233,7 @@ pub async fn delete_item_handler(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: DeleteItemResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -292,7 +292,7 @@ pub async fn create_share(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: CreateShareResponse { share_id },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -324,7 +324,7 @@ pub async fn list_shares_handler(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ListSharesResponse { shares: list },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -346,7 +346,7 @@ pub async fn revoke_share_handler(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: RevokeShareResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -368,7 +368,7 @@ pub async fn migrate_crypto(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: MigrateResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

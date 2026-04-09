@@ -12,6 +12,8 @@ mod signing;
 mod storage;
 mod notifications;
 mod state;
+#[cfg(test)]
+mod tests;
 
 use crate::config::Config;
 use crate::errors::ApiError;
@@ -19,6 +21,7 @@ use crate::errors::ApiError;
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
     telemetry::init_tracing();
+    telemetry::init_metrics();
 
     let config = Config::from_env()?;
     let state = state::AppState::new(config.clone()).await?;

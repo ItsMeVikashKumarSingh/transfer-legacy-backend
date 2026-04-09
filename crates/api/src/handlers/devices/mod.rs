@@ -102,7 +102,7 @@ pub async fn register(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: DeviceRegisterResponse { device_id: payload.device_id },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -147,7 +147,7 @@ pub async fn revoke(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: DeviceRevokeResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

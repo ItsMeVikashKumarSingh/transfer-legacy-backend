@@ -124,7 +124,7 @@ pub async fn create_evidence_package(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: EvidencePackageResponse { evidence, signature },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

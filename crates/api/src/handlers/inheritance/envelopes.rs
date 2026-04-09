@@ -75,7 +75,7 @@ pub async fn list_envelopes(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: EnvelopesResponse { policy_id: policy.policy_id, claim_id: query.claim_id, items },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

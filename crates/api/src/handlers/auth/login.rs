@@ -13,7 +13,7 @@ use crate::state::AppState;
 use crate::db::queries::auth::fetch_opaque_record;
 use transfer_legacy_crypto_core::opaque::{
     login_start,
-    login_finish,
+    login_finish as opaque_login_finish,
     serialize_login_state,
     deserialize_login_state,
 };
@@ -63,7 +63,7 @@ pub async fn login_init(
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
-    let rate_key = format!(\"login_init:{}\", payload.user_id);
+    let rate_key = format!("login_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::RateLimited, &request_id))?;
@@ -92,7 +92,7 @@ pub async fn login_init(
         state_b64,
     };
 
-    let mut conn = state.redis.get_async_connection().await
+    let mut conn = state.redis.get_multiplexed_async_connection().await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let key = format!("opaque:login:{}", session_id);
     let value = serde_json::to_string(&session)
@@ -116,7 +116,7 @@ pub async fn login_finish(
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
-    let mut conn = state.redis.get_async_connection().await
+    let mut conn = state.redis.get_multiplexed_async_connection().await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let key = format!("opaque:login:{}", payload.session_id);
     let session_json: Option<String> = conn.get(&key).await
@@ -130,7 +130,7 @@ pub async fn login_finish(
     let server_state = deserialize_login_state(&state_bytes)
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
-    login_finish(server_state, &payload.credential_finalization)
+    opaque_login_finish(server_state, &payload.credential_finalization)
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &request_id))?;
 
     let record = fetch_opaque_record(&state.db, session.user_id)
@@ -153,7 +153,7 @@ pub async fn login_finish(
             x25519_pubkey: URL_SAFE_NO_PAD.encode(record.x25519_pubkey),
             kyber768_pubkey: URL_SAFE_NO_PAD.encode(record.kyber768_pubkey),
         },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

@@ -30,7 +30,7 @@ pub async fn upload_anchor(config: &Config, key: &str, payload: Vec<u8>) -> Resu
     let client = Client::from_conf(conf);
     client
         .put_object()
-        .bucket(config.b2_bucket_name.clone())
+        .bucket(config.b2_audit_bucket_name.clone())
         .key(key)
         .body(ByteStream::from(payload))
         .send()

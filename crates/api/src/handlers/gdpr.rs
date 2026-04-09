@@ -184,7 +184,7 @@ pub async fn export_gdpr(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: response,
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -219,7 +219,7 @@ pub async fn erase_gdpr(
     )
     .bind(payload.person_id)
     .bind(payload.user_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await
     .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     if linked == 0 {
@@ -228,55 +228,55 @@ pub async fn erase_gdpr(
 
     sqlx::query("UPDATE vault.items SET ciphertext = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE vault.shares SET envelope = ''::bytea, grant_sig = ''::bytea, is_deleted = true, deleted_at = now() WHERE owner_id = $1")
         .bind(payload.user_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE auth_ext.opaque_records SET opaque_record = ''::bytea, emk_blob = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE auth_ext.devices SET ed25519_pubkey = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE auth_ext.mfa_factors SET enabled = false, totp_secret_enc = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE inheritance.policies SET beneficiaries = '[]'::jsonb, approvers = '[]'::jsonb, release_conditions = NULL, is_deleted = true, deleted_at = now() WHERE owner_id = $1")
         .bind(payload.user_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE inheritance.claim_attachments SET object_key = '', status = 'rejected' WHERE claim_id IN (SELECT claim_id FROM inheritance.claims WHERE claimant_person_id = $1)")
         .bind(payload.person_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("UPDATE auth_ext.persons SET enc_legal_name = ''::bytea, enc_email = ''::bytea, is_deleted = true, deleted_at = now() WHERE person_id = $1")
         .bind(payload.person_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
     sqlx::query("DELETE FROM auth_ext.person_user_links WHERE person_id = $1")
         .bind(payload.person_id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
@@ -285,7 +285,7 @@ pub async fn erase_gdpr(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: GdprEraseResponse { status: "ok" },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

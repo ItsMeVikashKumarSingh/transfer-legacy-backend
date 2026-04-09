@@ -1,5 +1,6 @@
 use chacha20poly1305::{aead::{Aead, KeyInit}, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
+use crate::memory::SensitiveBytes;
 
 #[derive(thiserror::Error, Debug)]
 pub enum AeadError {
@@ -42,8 +43,10 @@ pub fn decrypt(key: &[u8], nonce: &[u8], ciphertext: &[u8], aad: &[u8]) -> Resul
     if nonce.len() != 24 {
         return Err(AeadError::InvalidNonce);
     }
-    let cipher = XChaCha20Poly1305::new_from_slice(key).map_err(|_| AeadError::InvalidKey)?;
-    cipher
+    let key_protected = SensitiveBytes::new(key.to_vec());
+    let cipher = XChaCha20Poly1305::new_from_slice(key_protected.as_slice()).map_err(|_| AeadError::InvalidKey)?;
+    let plaintext = cipher
         .decrypt(XNonce::from_slice(nonce), chacha20poly1305::aead::Payload { msg: ciphertext, aad })
-        .map_err(|_| AeadError::Decrypt)
+        .map_err(|_| AeadError::Decrypt)?;
+    Ok(plaintext)
 }

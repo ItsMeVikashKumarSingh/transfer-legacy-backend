@@ -1,6 +1,7 @@
 use apalis::prelude::*;
 use base64::Engine as _;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
+use metrics::{counter, gauge, histogram};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -45,6 +46,30 @@ pub struct NotifyJob {
     pub attempts: u32,
 }
 
+impl Job for HeartbeatEvalJob {
+    const NAME: &'static str = "heartbeat_eval";
+}
+
+impl Job for AuditAnchorJob {
+    const NAME: &'static str = "audit_anchor";
+}
+
+impl Job for ReleaseEvalJob {
+    const NAME: &'static str = "release_eval";
+}
+
+impl Job for ConflictCheckJob {
+    const NAME: &'static str = "conflict_check";
+}
+
+impl Job for ReleaseDeliveryJob {
+    const NAME: &'static str = "release_delivery";
+}
+
+impl Job for NotifyJob {
+    const NAME: &'static str = "notify";
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum JobError {
     #[error("db error")]
@@ -69,6 +94,7 @@ pub async fn run_heartbeat_eval(
 ) -> Result<(), JobError> {
     let now = Utc::now();
     let pool = &state.db;
+    gauge!("job_queue_depth", "job_type" => "heartbeat_eval").set(0.0);
 
     enqueue_owner_reminders(pool, &state, now).await?;
 
@@ -76,11 +102,13 @@ pub async fn run_heartbeat_eval(
     let pending_rows = sqlx::query_as::<_, (Uuid, Uuid, DateTime<Utc>, DateTime<Utc>, String)>(
         "UPDATE inheritance.policies SET status = 'pending', updated_at = now() WHERE status = 'active' AND pending_at <= now() AND is_deleted = false RETURNING policy_id, owner_id, pending_at, grace_deadline, cadence::text",
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(tx.as_mut())
     .await
     .map_err(|_| JobError::Database)?;
 
     for row in pending_rows {
+        let lag = (now - row.2).num_seconds().max(0) as f64;
+        histogram!("heartbeat_worker_lag_seconds").record(lag);
         let payload = serde_json::json!({
             "policy_id": row.0,
             "status": "pending",
@@ -118,7 +146,7 @@ pub async fn run_heartbeat_eval(
     let investigating_rows = sqlx::query_as::<_, (Uuid, serde_json::Value, serde_json::Value)>(
         "UPDATE inheritance.policies SET status = 'investigating', updated_at = now() WHERE status = 'pending' AND grace_deadline <= now() AND is_deleted = false RETURNING policy_id, beneficiaries, approvers",
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(tx.as_mut())
     .await
     .map_err(|_| JobError::Database)?;
 
@@ -209,6 +237,7 @@ pub async fn run_notify(
             .await
             .map_err(|_| JobError::Database)?,
         Err(err) => {
+            counter!("api_errors_total", "route" => "worker_notify", "status" => "500").increment(1);
             let msg = format!("{:?}", err);
             notify_log::mark_failed(&state.db, &job.dedupe_key, &msg)
                 .await
@@ -263,6 +292,7 @@ pub async fn run_audit_anchor(
     b2::upload_anchor(&state.config, &key, anchor_bytes.clone())
         .await
         .map_err(|_| JobError::Anchor)?;
+    gauge!("job_queue_depth", "job_type" => "audit_anchor").set(0.0);
 
     sqlx::query(
         "INSERT INTO audit.anchors (anchor_date, head_hash, entry_count, snapshot, signature) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (anchor_date) DO NOTHING",
@@ -283,6 +313,7 @@ pub async fn run_release_eval(
     _: ReleaseEvalJob,
     state: Data<AppState>,
 ) -> Result<(), JobError> {
+    gauge!("job_queue_depth", "job_type" => "release_eval").set(0.0);
     let rows = sqlx::query_as::<_, (Uuid, serde_json::Value, Uuid)>(
         "SELECT p.policy_id, p.m_of_n, c.claim_id FROM inheritance.policies p JOIN inheritance.claims c ON c.policy_id = p.policy_id WHERE p.policy_type = 'm_of_n' AND p.status = 'investigating' AND c.status = 'confirmed'",
     )
@@ -307,7 +338,7 @@ pub async fn run_release_eval(
             let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
             sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
                 .bind(row.0)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(|_| JobError::Database)?;
 
@@ -344,7 +375,7 @@ pub async fn run_conflict_check(
             "UPDATE inheritance.policies SET status = 'conflict_pending', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'release_ready'",
         )
         .bind(row.0)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| JobError::Database)?;
 
@@ -359,7 +390,7 @@ pub async fn run_conflict_check(
             .bind(row.0)
             .bind("multiple_confirmed_claimants")
             .bind(details)
-            .execute(&mut *tx)
+            .execute(tx.as_mut())
             .await
             .map_err(|_| JobError::Database)?;
 
@@ -388,7 +419,7 @@ pub async fn run_conflict_check(
             "UPDATE inheritance.policies SET status = 'manual_review', updated_at = now() WHERE policy_id = $1 AND status = 'conflict_pending'",
         )
         .bind(row.0)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| JobError::Database)?;
 
@@ -397,7 +428,7 @@ pub async fn run_conflict_check(
         )
         .bind(Uuid::new_v4())
         .bind(row.0)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| JobError::Database)?;
 
@@ -431,7 +462,7 @@ pub async fn run_release_delivery(
             "UPDATE inheritance.policies SET status = 'released', updated_at = now() WHERE policy_id = $1 AND status = 'release_ready'",
         )
         .bind(row.0)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await
         .map_err(|_| JobError::Database)?;
 
@@ -571,11 +602,8 @@ async fn enqueue_owner_notification(
 }
 
 async fn enqueue_notify(state: &AppState, job: NotifyJob) -> Result<(), JobError> {
-    state
-        .notify_storage
-        .push(job)
-        .await
-        .map_err(|_| JobError::Storage)?;
+    let mut notify_storage = state.notify_storage.clone();
+    notify_storage.push(job).await.map_err(|_| JobError::Storage)?;
     Ok(())
 }
 

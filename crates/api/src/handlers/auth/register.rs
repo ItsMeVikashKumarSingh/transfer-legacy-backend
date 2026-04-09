@@ -65,7 +65,7 @@ pub async fn register_init(
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
-    let rate_key = format!(\"register_init:{}\", payload.user_id);
+    let rate_key = format!("register_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::RateLimited, &request_id))?;
@@ -88,7 +88,7 @@ pub async fn register_init(
         user_id: payload.user_id,
         credential_identifier,
     };
-    let mut conn = state.redis.get_async_connection().await.map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    let mut conn = state.redis.get_multiplexed_async_connection().await.map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let key = format!("opaque:reg:{}", session_id);
     let value = serde_json::to_string(&session)
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
@@ -111,7 +111,7 @@ pub async fn register_finish(
     require_idempotency(&state, &headers)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
-    let mut conn = state.redis.get_async_connection().await
+    let mut conn = state.redis.get_multiplexed_async_connection().await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
     let key = format!("opaque:reg:{}", payload.session_id);
     let session_json: Option<String> = conn.get(&key).await
@@ -166,7 +166,7 @@ pub async fn register_finish(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: RegisterFinishResponse { user_id: session.user_id },
-        request_id: request_id.to_string(),
+        request_id: crate::middleware::request_id::request_id_string(&request_id),
     };
     let aead = wrap_response(&state, &headers, &envelope)?;
     Ok(Json(aead))

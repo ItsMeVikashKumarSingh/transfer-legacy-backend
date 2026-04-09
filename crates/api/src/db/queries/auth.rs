@@ -28,7 +28,7 @@ pub async fn insert_person_and_link(
     .bind(person_id)
     .bind(enc_legal_name)
     .bind(enc_email)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     sqlx::query(
@@ -36,7 +36,7 @@ pub async fn insert_person_and_link(
     )
     .bind(person_id)
     .bind(user_id)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     Ok(person_id)
@@ -60,7 +60,7 @@ pub async fn insert_opaque_record(
     .bind(&row.kyber768_pubkey)
     .bind(&row.crypto_version)
     .bind(row.schema_version)
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
 
     Ok(())
