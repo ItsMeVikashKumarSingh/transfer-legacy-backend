@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 use uuid::Uuid;
+use serde_json::Value;
 
 pub async fn insert_totp_factor(
     pool: &PgPool,
@@ -28,4 +29,47 @@ pub async fn fetch_totp_secret(pool: &PgPool, user_id: Uuid) -> Result<Vec<u8>, 
     .fetch_one(pool)
     .await?;
     Ok(secret)
+}
+
+pub async fn upsert_webauthn_factor(
+    pool: &PgPool,
+    user_id: Uuid,
+    credential: Value,
+    crypto_version: String,
+    schema_version: i32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO auth_ext.mfa_factors (user_id, factor_type, webauthn_credential, crypto_version, schema_version)
+         VALUES ($1, 'webauthn', $2, $3, $4)",
+    )
+    .bind(user_id)
+    .bind(credential)
+    .bind(crypto_version)
+    .bind(schema_version)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn fetch_webauthn_credential(
+    pool: &PgPool,
+    user_id: Uuid,
+    credential_id: &str,
+) -> Result<Value, sqlx::Error> {
+    let credential = sqlx::query_scalar::<_, Value>(
+        "SELECT webauthn_credential
+         FROM auth_ext.mfa_factors
+         WHERE user_id = $1
+           AND factor_type = 'webauthn'
+           AND enabled = true
+           AND is_deleted = false
+           AND webauthn_credential->>'credential_id' = $2
+         ORDER BY created_at DESC
+         LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(credential_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(credential)
 }

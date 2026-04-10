@@ -2,15 +2,19 @@ version: "3.9"
 
 services:
   api:
+    image: ${API_IMAGE:-transfer-legacy-api:local}
     build:
       context: ..
       dockerfile: infra/Dockerfile
       args:
         BIN_NAME: transfer-legacy-api
+    env_file:
+      - ${RUNTIME_PROFILE_FILE:-infra/profiles/small.runtime.env}
     environment:
       - TL_BIND_ADDR=0.0.0.0
       - TL_PORT=8080
       - TL_ALLOWED_ORIGINS=http://localhost:3000
+      - RUNTIME_PROFILE=${RUNTIME_PROFILE:-small}
     depends_on:
       - redis
       - openbao
@@ -20,16 +24,20 @@ services:
       core: 0
 
   worker:
+    image: ${WORKER_IMAGE:-transfer-legacy-worker:local}
     build:
       context: ..
       dockerfile: infra/Dockerfile
       args:
         BIN_NAME: transfer-legacy-worker
     command: ["/app/transfer-legacy-worker"]
+    env_file:
+      - ${RUNTIME_PROFILE_FILE:-infra/profiles/small.runtime.env}
     environment:
       - TL_BIND_ADDR=0.0.0.0
       - TL_PORT=8081
       - TL_ALLOWED_ORIGINS=http://localhost:3000
+      - RUNTIME_PROFILE=${RUNTIME_PROFILE:-small}
     depends_on:
       - redis
       - openbao
@@ -37,13 +45,13 @@ services:
       core: 0
 
   redis:
-    image: redis:7.2.13@sha256:7cf869be4d3d7956fb6dea29416f423f8b15f4f83581dee636591e11a520ac41
+    image: ${REDIS_IMAGE:-redis:7.2.13@sha256:7cf869be4d3d7956fb6dea29416f423f8b15f4f83581dee636591e11a520ac41}
     command: ["redis-server", "--requirepass", "localdev", "--bind", "0.0.0.0"]
     ports:
       - "6379:6379"
 
   openbao:
-    image: openbao/openbao:2.5.0-amd64@sha256:74a9997f0fc630f429fd71bdf2e7fffba39fe3024ca1ded9f094b15f7ea3f79e
+    image: ${OPENBAO_IMAGE:-openbao/openbao:2.5.0-amd64@sha256:74a9997f0fc630f429fd71bdf2e7fffba39fe3024ca1ded9f094b15f7ea3f79e}
     command: ["server", "-config=/openbao/config.hcl"]
     cap_add:
       - IPC_LOCK

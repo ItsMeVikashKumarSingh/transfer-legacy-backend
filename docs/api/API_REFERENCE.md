@@ -218,27 +218,48 @@ Server decrypts this into the typed payload listed below.
 
 ### `POST /v1/auth/mfa/webauthn/register/start`
 
-- Current behavior: returns internal error (not implemented yet)
+- Idempotency: required
 - Request `WebAuthnStartRequest`:
   - `user_id: uuid`
+- Response `WebAuthnStartResponse`:
+  - `challenge_id: uuid`
+  - `challenge_b64: base64url`
 
 ### `POST /v1/auth/mfa/webauthn/register/finish`
 
-- Current behavior: returns internal error (not implemented yet)
+- Idempotency: required
 - Request `WebAuthnFinishRequest`:
   - `user_id: uuid`
+  - `challenge_id: uuid`
+  - `credential_id: string`
+  - `public_key_b64: base64url`
+  - `signature_b64: base64url`
+  - `authenticator_data_b64: base64url`
+  - `client_data_json_b64: base64url`
+- Response `WebAuthnFinishResponse`:
+  - `status: "ok"`
 
 ### `POST /v1/auth/mfa/webauthn/authenticate/start`
 
-- Current behavior: returns internal error (not implemented yet)
+- Idempotency: required
 - Request `WebAuthnStartRequest`:
   - `user_id: uuid`
+- Response `WebAuthnStartResponse`:
+  - `challenge_id: uuid`
+  - `challenge_b64: base64url`
 
 ### `POST /v1/auth/mfa/webauthn/authenticate/finish`
 
-- Current behavior: returns internal error (not implemented yet)
+- Idempotency: required
 - Request `WebAuthnFinishRequest`:
   - `user_id: uuid`
+  - `challenge_id: uuid`
+  - `credential_id: string`
+  - `signature_b64: base64url`
+  - `authenticator_data_b64: base64url`
+  - `client_data_json_b64: base64url`
+- Response `WebAuthnFinishResponse`:
+  - `status: "ok"`
 
 ### `POST /v1/auth/stepup/request`
 

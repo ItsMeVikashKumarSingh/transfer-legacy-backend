@@ -7,8 +7,16 @@ on:
     branches: ["main", "dev"]
 
 jobs:
-  build-test:
-    runs-on: ubuntu-latest
+  tier1-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -16,15 +24,31 @@ jobs:
           toolchain: 1.77.2
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Architecture
+        run: |
+          echo "tier=1 arch=${{ matrix.arch }}"
+          uname -a
       - name: Format
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Tests
-        run: cargo test --workspace
+        run: cargo test --workspace --all-targets
       - uses: taiki-e/install-action@cargo-deny
       - uses: taiki-e/install-action@cargo-audit
       - name: Cargo Deny
         run: cargo deny check
       - name: Cargo Audit
         run: cargo audit
+
+  tier2-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose Parse (provider-neutral templates)
+        run: |
+          set -a
+          . infra/environments/staging.env.template
+          . infra/profiles/standard.runtime.env
+          set +a
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.staging.yml config > /tmp/tl-compose-config.yml

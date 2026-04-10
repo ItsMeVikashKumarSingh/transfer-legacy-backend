@@ -1,0 +1,26 @@
+name: Rules Compliance
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.77.2
+      - name: No TODO/FIXME Placeholders
+        run: |
+          if rg -n "TODO|FIXME|todo!|unimplemented!" crates docs infra; then
+            echo "placeholder markers found"
+            exit 1
+          fi
+      - name: No Server Decrypt Invariant
+        run: cargo test --package transfer-legacy-api tests::security::no_server_decrypt_test::no_server_decrypt_calls_in_api_or_worker -- --exact
+      - name: Security Test Suite
+        run: cargo test --package transfer-legacy-api tests::security:: -- --nocapture

@@ -24,10 +24,18 @@ attestation workflows, and tamper-evident audit trails.
 2. Follow `DEVELOPMENT_PLAN.md` phases and acceptance criteria.
 3. Review all files in `rules/` before making changes.
 
+## Instance Compatibility
+- Support matrix: `docs/infra/INSTANCE_SUPPORT_MATRIX.md`
+- Tier 1 (release-blocking): Linux `amd64` and Linux `arm64`
+- Tier 2: other Linux shapes that pass smoke and critical security tests
+- Tier 3: experimental/best-effort targets
+
 ## Local Setup (Development)
 - Configure `.env.local` with required variables.
 - Run API and worker containers via Docker Compose (see `infra/`).
 - Internal-only endpoints (`/metrics`, `/v1/openapi.json`, `/v1/docs`) can be protected with `TL_INTERNAL_API_TOKEN`.
+- Runtime profiles are available under `infra/profiles/`.
+- Provider-neutral environment templates are available under `infra/environments/`.
 
 ## API Docs
 - Full endpoint reference: `docs/api/API_REFERENCE.md`
@@ -46,6 +54,7 @@ attestation workflows, and tamper-evident audit trails.
 - All signing uses OpenBao Transit (no cloud KMS dependency).
 - B2 is used for encrypted attachments and audit anchors.
 - Security scans run via GitHub Actions (`cargo deny`, `cargo audit`, semgrep, gitleaks, trivy).
+- Rules compliance is enforced in CI via `.github/workflows/rules-compliance.yml`.
 - Fuzz harnesses are defined under `crates/crypto-core/fuzz`.
 
 ## Operations
