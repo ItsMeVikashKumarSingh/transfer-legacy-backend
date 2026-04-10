@@ -18,7 +18,7 @@ status: "draft"
 
 ## Investigation Checklist
 1. Review Sentry events and request IDs.
-2. Check Redis queue depth and failed jobs.
+2. Check Valkey/Redis queue depth and failed jobs.
 3. Verify `audit.events` chain continuity for affected policies.
 4. Validate OpenBao transit signing health.
 5. Confirm B2 object integrity for impacted attachments/anchors.

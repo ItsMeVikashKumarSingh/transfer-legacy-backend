@@ -45,8 +45,8 @@ services:
       core: 0
 
   redis:
-    image: ${REDIS_IMAGE:-redis:7.2.13@sha256:7cf869be4d3d7956fb6dea29416f423f8b15f4f83581dee636591e11a520ac41}
-    command: ["redis-server", "--requirepass", "localdev", "--bind", "0.0.0.0"]
+    image: ${REDIS_IMAGE:-valkey/valkey:8-alpine}
+    command: ["valkey-server", "--requirepass", "localdev", "--bind", "0.0.0.0"]
     ports:
       - "6379:6379"
 

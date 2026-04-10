@@ -28,7 +28,7 @@ The matrix defines test depth and release gates per architecture.
 ## Environment Separation
 
 - `local`, `staging`, and `production` remain isolated environments.
-- Each environment uses separate secrets, database projects, Redis instances,
+- Each environment uses separate secrets, database projects, Valkey/Redis instances,
   and observability projects.
 - Non-local environments load secrets from OpenBao KV only.
 

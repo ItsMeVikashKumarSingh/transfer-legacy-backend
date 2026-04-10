@@ -6,7 +6,7 @@ Reference sections in `project_detail.md`: threat model, memory hygiene, audit, 
 - Never store plaintext passwords, MK, IK, KEK, EMK, seed phrases, recovery shares, or decrypted user documents on the server.[file:1]
 - Never implement server-side decryption for vault items or beneficiary envelopes; the design requires client-only decryption and zero-knowledge storage.[file:1]
 - Never log secrets, ciphertext payloads, tokens, raw request bodies, or cryptographic material.
-- Never expose Redis, PostgreSQL, or OpenBao publicly; internal network only.
+- Never expose Valkey/Redis, PostgreSQL, or OpenBao publicly; internal network only.
 - Never use fallback embedded data, fallback keys, fallback config, or silent degraded-security modes.
 - Never bypass audit logging for any state-changing action related to auth, vault, policy, claims, attestation, release, or manual review.[file:1]
 - Never allow a single operator to finalize manual release decisions; dual-operator approval is required.[file:1]

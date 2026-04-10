@@ -5,7 +5,7 @@ Reference sections in `project_detail.md`: deployment, environment separation, o
 ## Production stack
 - Hetzner hosts the backend runtime.
 - Supabase provides PostgreSQL and selected platform services.
-- Redis handles rate limiting, idempotency, and worker queue support.
+- Valkey (Redis-compatible) handles rate limiting, idempotency, and worker queue support.
 - Backblaze B2 stores encrypted user files.
 - OpenBao KV manages application secrets.
 - Signing service handles release-record and audit-anchor signatures required by the system design.[file:1]
@@ -14,7 +14,7 @@ Reference sections in `project_detail.md`: deployment, environment separation, o
 - Backend must run in Docker.
 - Containers run as non-root.
 - Production services are internal-network only except reverse proxy / API ingress.
-- No public Redis, no public DB, no public OpenBao, no public signing service.
+- No public Valkey/Redis, no public DB, no public OpenBao, no public signing service.
 - Environments must be fully separated: local, staging, production.
 
 ## Config and secrets
@@ -26,7 +26,7 @@ Reference sections in `project_detail.md`: deployment, environment separation, o
 ## Backups and recovery
 - PostgreSQL backups must be scheduled and restore-tested.
 - B2 versioning or equivalent recovery path must be enabled for encrypted files.
-- Redis is not a source of truth for user data.
+- Valkey/Redis is not a source of truth for user data.
 - Recovery procedures must be documented and tested.
 
 ## Monitoring

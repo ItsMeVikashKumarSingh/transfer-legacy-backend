@@ -45,4 +45,4 @@ Success format:
 ## Rate limiting and idempotency
 - Auth init/finish endpoints must be heavily rate limited.
 - Claim, invite, file confirm, attestation, and release-trigger paths must require idempotency keys.
-- Rate limit state belongs in Redis.
+- Rate limit state belongs in Valkey/Redis.

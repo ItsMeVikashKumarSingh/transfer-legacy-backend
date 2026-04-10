@@ -36,6 +36,7 @@ attestation workflows, and tamper-evident audit trails.
 - Internal-only endpoints (`/metrics`, `/v1/openapi.json`, `/v1/docs`) can be protected with `TL_INTERNAL_API_TOKEN`.
 - Runtime profiles are available under `infra/profiles/`.
 - Provider-neutral environment templates are available under `infra/environments/`.
+- Local development uses Valkey (Redis-compatible) via Docker Compose by default.
 
 ## API Docs
 - Full endpoint reference: `docs/api/API_REFERENCE.md`
