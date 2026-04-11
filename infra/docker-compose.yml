@@ -9,7 +9,7 @@ services:
       args:
         BIN_NAME: transfer-legacy-api
     env_file:
-      - ${RUNTIME_PROFILE_FILE:-infra/profiles/small.runtime.env}
+      - ${RUNTIME_PROFILE_FILE:-profiles/small.runtime.env}
     environment:
       - TL_BIND_ADDR=0.0.0.0
       - TL_PORT=8080
@@ -32,7 +32,7 @@ services:
         BIN_NAME: transfer-legacy-worker
     command: ["/app/transfer-legacy-worker"]
     env_file:
-      - ${RUNTIME_PROFILE_FILE:-infra/profiles/small.runtime.env}
+      - ${RUNTIME_PROFILE_FILE:-profiles/small.runtime.env}
     environment:
       - TL_BIND_ADDR=0.0.0.0
       - TL_PORT=8081
