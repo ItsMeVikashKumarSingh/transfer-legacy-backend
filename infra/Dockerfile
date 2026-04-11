@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.5
 
-ARG RUST_IMAGE=rust:stable
+ARG RUST_IMAGE=rust:1.86.0
 ARG RUNTIME_IMAGE=gcr.io/distroless/cc-debian12:nonroot@sha256:8f02d47496256aca25168c508024a60d81af996bbd2d89db4cf5cdf13dff2821
 
 FROM ${RUST_IMAGE} AS builder
