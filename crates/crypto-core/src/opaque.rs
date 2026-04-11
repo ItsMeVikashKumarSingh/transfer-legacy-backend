@@ -46,6 +46,7 @@ pub fn server_setup_to_b64(setup: &OpaqueServerSetup) -> String {
 }
 
 pub fn server_setup_from_b64(encoded: &str) -> Result<OpaqueServerSetup, OpaqueError> {
+    let encoded = encoded.trim();
     let bytes = URL_SAFE_NO_PAD
         .decode(encoded)
         .map_err(|_| OpaqueError::Base64)?;
