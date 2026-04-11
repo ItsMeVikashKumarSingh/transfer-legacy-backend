@@ -83,7 +83,7 @@ pub fn wrap_response<T: Serialize>(state: &AppState, headers: &HeaderMap, value:
 
 fn decode_key(key_b64: &str) -> Result<Vec<u8>, ApiError> {
     URL_SAFE_NO_PAD
-        .decode(key_b64)
+        .decode(key_b64.trim())
         .map_err(|_| ApiError::app(AppError::Internal))
 }
 
