@@ -7,5 +7,4 @@ listener "tcp" {
   tls_disable = 1
 }
 
-disable_mlock = false
 ui = false
