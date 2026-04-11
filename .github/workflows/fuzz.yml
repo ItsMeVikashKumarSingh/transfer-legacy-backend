@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.86.0
+          toolchain: 1.91.1
       - uses: taiki-e/install-action@cargo-fuzz
       - name: Fuzz envelope parsing (1h)
         run: cargo fuzz run --manifest-path crates/crypto-core/fuzz/Cargo.toml fuzz_envelope_parsing -- -max_total_time=3600
