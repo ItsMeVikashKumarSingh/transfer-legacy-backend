@@ -3,6 +3,11 @@
 /.vscode
 .env
 .env.local
+.env.*.local
+.env.docker
+
+# Local dev postgres data (compose)
+infra/postgres/data/
 .env.*
 !.env.example
 .DS_Store

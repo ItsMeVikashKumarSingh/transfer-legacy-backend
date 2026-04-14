@@ -28,6 +28,13 @@ pub struct Config {
     pub server_hmac_secret: String,
     pub brevo_api_key: String,
     pub brevo_invite_template_id: String,
+    pub brevo_owner_reminder_early_template_id: String,
+    pub brevo_owner_reminder_urgent_template_id: String,
+    pub brevo_owner_reminder_daily_template_id: String,
+    pub brevo_beneficiary_claim_available_template_id: String,
+    pub brevo_approver_attestation_request_template_id: String,
+    pub brevo_conflict_hold_notice_template_id: String,
+    pub brevo_release_ready_template_id: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -109,6 +116,20 @@ impl Config {
             .map_err(|_| ConfigError::MissingVar("BREVO_API_KEY"))?;
         let brevo_invite_template_id = env::var("BREVO_INVITE_TEMPLATE_ID")
             .map_err(|_| ConfigError::MissingVar("BREVO_INVITE_TEMPLATE_ID"))?;
+        let brevo_owner_reminder_early_template_id = env::var("BREVO_OWNER_REMINDER_EARLY_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_OWNER_REMINDER_EARLY_TEMPLATE_ID"))?;
+        let brevo_owner_reminder_urgent_template_id = env::var("BREVO_OWNER_REMINDER_URGENT_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_OWNER_REMINDER_URGENT_TEMPLATE_ID"))?;
+        let brevo_owner_reminder_daily_template_id = env::var("BREVO_OWNER_REMINDER_DAILY_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_OWNER_REMINDER_DAILY_TEMPLATE_ID"))?;
+        let brevo_beneficiary_claim_available_template_id = env::var("BREVO_BENEFICIARY_CLAIM_AVAILABLE_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_BENEFICIARY_CLAIM_AVAILABLE_TEMPLATE_ID"))?;
+        let brevo_approver_attestation_request_template_id = env::var("BREVO_APPROVER_ATTESTATION_REQUEST_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_APPROVER_ATTESTATION_REQUEST_TEMPLATE_ID"))?;
+        let brevo_conflict_hold_notice_template_id = env::var("BREVO_CONFLICT_HOLD_NOTICE_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_CONFLICT_HOLD_NOTICE_TEMPLATE_ID"))?;
+        let brevo_release_ready_template_id = env::var("BREVO_RELEASE_READY_TEMPLATE_ID")
+            .map_err(|_| ConfigError::MissingVar("BREVO_RELEASE_READY_TEMPLATE_ID"))?;
 
         Ok(Self {
             bind_addr,
@@ -136,6 +157,13 @@ impl Config {
             server_hmac_secret,
             brevo_api_key,
             brevo_invite_template_id,
+            brevo_owner_reminder_early_template_id,
+            brevo_owner_reminder_urgent_template_id,
+            brevo_owner_reminder_daily_template_id,
+            brevo_beneficiary_claim_available_template_id,
+            brevo_approver_attestation_request_template_id,
+            brevo_conflict_hold_notice_template_id,
+            brevo_release_ready_template_id,
         })
     }
 }

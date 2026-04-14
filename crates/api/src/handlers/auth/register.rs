@@ -67,8 +67,7 @@ pub async fn register_init(
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
     let rate_key = format!("register_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::RateLimited, &request_id))?;
+        .await?;
     let credential_identifier = payload
         .credential_identifier
         .unwrap_or_else(|| payload.user_id.to_string());

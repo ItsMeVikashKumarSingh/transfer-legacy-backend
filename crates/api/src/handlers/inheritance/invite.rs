@@ -77,14 +77,17 @@ pub async fn create_invite(
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
 
-    let _ = send_invite_email(
+    if let Err(e) = send_invite_email(
         &state.config,
         &payload.email,
         &invite_id.to_string(),
         &claim_token,
         &expires_at.to_rfc3339(),
     )
-    .await;
+    .await {
+        tracing::error!(request_id = %crate::middleware::request_id::request_id_string(&request_id), error = %e, "failed to send invite email");
+        // We continue because the invite is already in the DB, but ideally we'd want a retry or notice to the user.
+    }
 
     let invite_payload = serde_json::json!({
         "invite_id": invite_id,

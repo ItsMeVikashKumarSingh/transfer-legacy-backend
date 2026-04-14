@@ -33,9 +33,12 @@ aws-config = "1"
 aws-sdk-s3 = "1"
 metrics = "0.23"
 metrics-exporter-prometheus = "0.15"
+dotenvy = "0.15"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }
 
 [dev-dependencies]
 walkdir = "2"
+ed25519-dalek = "2"
+opaque-ke = { version = "4", features = ["serde"] }

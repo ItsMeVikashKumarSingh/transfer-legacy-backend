@@ -19,16 +19,33 @@ pub async fn openapi_json(
         "openapi": "3.1.0",
         "info": {
             "title": "Transfer Legacy API",
-            "version": "1.0.0"
+            "version": "1.0.0",
+            "description": "Secure Zero-Knowledge Inheritance Backend. \n\n### 🛡️ Crypto Recommendations \n- **Web**: libsodium-wrappers + opaque-ts \n- **Android**: Google Tink + Sodium-JNI \n- **iOS**: CryptoKit + Swift-Sodium \n- **Desktop**: opaque-ke (Rust) or libsodium bindings"
         },
         "servers": [{ "url": "/v1" }],
         "paths": {
             "/health": { "get": { "summary": "Health check" } },
-            "/server-capabilities": { "get": { "summary": "Server capabilities" } },
-            "/ops/reviews": { "get": { "summary": "List manual reviews" } },
-            "/ops/reviews/{review_id}": { "get": { "summary": "Get manual review" } },
-            "/ops/reviews/{review_id}/decision": { "post": { "summary": "Apply dual-sign decision" } },
-            "/audit/chain": { "get": { "summary": "Get audit chain verification" } }
+            "/server-capabilities": { "get": { "summary": "Server capabilities (PAKE/Crypto params)" } },
+            "/auth/register/init": { "post": { "summary": "Initiate OPAQUE registration" } },
+            "/auth/register/finish": { "put": { "summary": "Complete registration (AEAD)" } },
+            "/auth/login/init": { "post": { "summary": "Initiate OPAQUE login" } },
+            "/auth/login/finish": { "post": { "summary": "Complete login (Returns session token + AEAD key)" } },
+            "/vault/items": { "post": { "summary": "Create encrypted vault item (AEAD)" } },
+            "/vault/items/list": { "post": { "summary": "List vault items (AEAD)" } },
+            "/inheritance/policy": { "put": { "summary": "Upsert inheritance policy" } },
+            "/inheritance/heartbeat": { "post": { "summary": "Liveness heartbeat" } },
+            "/claims/initiate": { "post": { "summary": "Initiate inheritance claim" } },
+            "/audit/chain": { "get": { "summary": "Verify tamper-evident audit chain" } },
+            "/ops/reviews": { "get": { "summary": "List manual reviews" } }
+        },
+        "components": {
+            "securitySchemes": {
+                "bearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT"
+                }
+            }
         },
         "x-request-id": crate::middleware::request_id::request_id_string(&request_id)
     });

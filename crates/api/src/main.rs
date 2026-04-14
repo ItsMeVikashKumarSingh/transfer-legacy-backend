@@ -20,6 +20,8 @@ use crate::errors::ApiError;
 
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
+    dotenvy::from_filename(".env.local").ok();
+    dotenvy::dotenv().ok();
     telemetry::init_tracing();
     telemetry::init_metrics();
 
