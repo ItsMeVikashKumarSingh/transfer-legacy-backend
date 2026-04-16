@@ -1,6 +1,11 @@
-{$PUBLIC_HOST} {
-    @internal path /metrics /v1/openapi.json /v1/docs
-    respond @internal 404
-    reverse_proxy api:8080
-    encode gzip
+api.transferlegacy.com {
+    reverse_proxy backend:8080
+    
+    header {
+        # Security headers
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer-when-downgrade
+    }
 }

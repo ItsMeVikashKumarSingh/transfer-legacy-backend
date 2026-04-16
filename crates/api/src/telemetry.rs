@@ -1,7 +1,7 @@
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use metrics::gauge;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use std::sync::OnceLock;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 static PROM_HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
 

@@ -39,29 +39,30 @@ pub async fn list_envelopes(
     headers: HeaderMap,
     Query(query): Query<EnvelopesQuery>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let claim = fetch_claim_for_update_tx(&mut tx, query.claim_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
     if claim.claimant_person_id != query.claimant_person_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
     }
 
     let policy = fetch_policy_for_update_tx(&mut tx, claim.policy_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
     if policy.status != "released" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
     }
 
     tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let shares = list_shares_for_grantee_owner(&state.db, policy.owner_id, query.claimant_person_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let items = shares
         .into_iter()
@@ -75,8 +76,9 @@ pub async fn list_envelopes(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: EnvelopesResponse { policy_id: policy.policy_id, claim_id: query.claim_id, items },
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: rid,
     };
-    let aead = wrap_response(&state, &headers, &envelope)?;
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
 }

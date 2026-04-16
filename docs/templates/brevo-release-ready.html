@@ -65,18 +65,25 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Release</span>
-        <h1>Release ready</h1>
+        <h1>Release ready for "{{params.policy_name}}"</h1>
         <p>
-          The release is now ready. You can access the envelopes associated with
-          this {{params.brand_name}} policy.
+          The heritage release for <strong>{{params.owner_name}}</strong>'s plan is now complete. 
+          You can now access the secure envelopes associated with this policy.
         </p>
-        <a class="cta" href="{{params.app_url}}/release">
-          Access Envelopes
+        <a class="cta" href="{{params.app_url}}/inheritance/envelopes">
+          Access Secure Envelopes
         </a>
       </div>
       <div class="footer">
-        You are receiving this notification because you are a beneficiary in
-        {{params.brand_name}}.
+        <p>
+          You are receiving this notification because you are a designated beneficiary in
+          {{params.owner_name}}'s plan.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          We secure digital legacies with end-to-end encryption. 
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> to learn more.
+        </p>
       </div>
     </div>
   </body>

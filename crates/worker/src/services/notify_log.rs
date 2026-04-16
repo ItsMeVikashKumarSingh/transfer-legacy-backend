@@ -30,10 +30,7 @@ pub async fn insert_queued(
     Ok(res.rows_affected() > 0)
 }
 
-pub async fn mark_sent(
-    pool: &PgPool,
-    dedupe_key: &str,
-) -> Result<(), NotifyLogError> {
+pub async fn mark_sent(pool: &PgPool, dedupe_key: &str) -> Result<(), NotifyLogError> {
     sqlx::query(
         "UPDATE notify.notification_log SET status = 'sent', sent_at = now() WHERE dedupe_key = $1",
     )

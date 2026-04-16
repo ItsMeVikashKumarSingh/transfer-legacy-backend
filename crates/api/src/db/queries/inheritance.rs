@@ -19,6 +19,8 @@ pub struct PolicyRow {
     pub grace_deadline: Option<DateTime<Utc>>,
     pub conflict_hold_until: Option<DateTime<Utc>>,
     pub audit_head_hash: Option<Vec<u8>>,
+    pub label: Option<String>,
+    pub enc_owner_name: Option<Vec<u8>>,
 }
 
 pub async fn insert_policy_tx(
@@ -36,10 +38,11 @@ pub async fn insert_policy_tx(
     grace_deadline: Option<DateTime<Utc>>,
     crypto_version: String,
     schema_version: i32,
+    label: Option<&str>,
 ) -> Result<Uuid, sqlx::Error> {
     let policy_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO inheritance.policies (policy_id, owner_id, policy_type, cadence, m_of_n, beneficiaries, approvers, release_conditions, status, last_heartbeat_at, pending_at, grace_deadline, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+        "INSERT INTO inheritance.policies (policy_id, owner_id, policy_type, cadence, m_of_n, beneficiaries, approvers, release_conditions, status, last_heartbeat_at, pending_at, grace_deadline, crypto_version, schema_version, label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)",
     )
     .bind(policy_id)
     .bind(owner_id)
@@ -55,6 +58,7 @@ pub async fn insert_policy_tx(
     .bind(grace_deadline)
     .bind(crypto_version)
     .bind(schema_version)
+    .bind(label)
     .execute(tx.as_mut())
     .await?;
 
@@ -73,9 +77,10 @@ pub async fn update_policy_tx(
     release_conditions: Option<Value>,
     pending_at: Option<DateTime<Utc>>,
     grace_deadline: Option<DateTime<Utc>>,
+    label: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let res = sqlx::query(
-        "UPDATE inheritance.policies SET policy_type = $1, cadence = $2, m_of_n = $3, beneficiaries = $4, approvers = $5, release_conditions = $6, pending_at = $7, grace_deadline = $8, updated_at = now() WHERE policy_id = $9 AND owner_id = $10",
+        "UPDATE inheritance.policies SET policy_type = $1, cadence = $2, m_of_n = $3, beneficiaries = $4, approvers = $5, release_conditions = $6, pending_at = $7, grace_deadline = $8, label = $9, updated_at = now() WHERE policy_id = $10 AND owner_id = $11",
     )
     .bind(policy_type)
     .bind(cadence)
@@ -85,6 +90,7 @@ pub async fn update_policy_tx(
     .bind(release_conditions)
     .bind(pending_at)
     .bind(grace_deadline)
+    .bind(label)
     .bind(policy_id)
     .bind(owner_id)
     .execute(tx.as_mut())
@@ -98,8 +104,13 @@ pub async fn update_policy_tx(
 }
 
 pub async fn fetch_policy(pool: &PgPool, policy_id: Uuid) -> Result<PolicyRow, sqlx::Error> {
-    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<Value>, Value, Value, Option<Value>, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<Vec<u8>>)>(
-        "SELECT policy_id, owner_id, policy_type::text, cadence::text, m_of_n, beneficiaries, approvers, release_conditions, status::text, last_heartbeat_at, pending_at, grace_deadline, conflict_hold_until, audit_head_hash FROM inheritance.policies WHERE policy_id = $1 AND is_deleted = false",
+    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<Value>, Value, Value, Option<Value>, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<Vec<u8>>, Option<String>, Option<Vec<u8>>)>(
+        r#"SELECT 
+            p.policy_id, p.owner_id, p.policy_type::text, p.cadence::text, p.m_of_n, p.beneficiaries, p.approvers, p.release_conditions, p.status::text, p.last_heartbeat_at, p.pending_at, p.grace_deadline, p.conflict_hold_until, p.audit_head_hash, p.label, per.enc_legal_name
+        FROM inheritance.policies p
+        LEFT JOIN auth_ext.person_user_links pul ON pul.user_id = p.owner_id
+        LEFT JOIN auth_ext.persons per ON per.person_id = pul.person_id
+        WHERE p.policy_id = $1 AND p.is_deleted = false"#,
     )
     .bind(policy_id)
     .fetch_one(pool)
@@ -120,6 +131,8 @@ pub async fn fetch_policy(pool: &PgPool, policy_id: Uuid) -> Result<PolicyRow, s
         grace_deadline: row.11,
         conflict_hold_until: row.12,
         audit_head_hash: row.13,
+        label: row.14,
+        enc_owner_name: row.15,
     })
 }
 
@@ -127,8 +140,13 @@ pub async fn fetch_policy_for_update_tx(
     tx: &mut Transaction<'_, Postgres>,
     policy_id: Uuid,
 ) -> Result<PolicyRow, sqlx::Error> {
-    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<Value>, Value, Value, Option<Value>, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<Vec<u8>>)>(
-        "SELECT policy_id, owner_id, policy_type::text, cadence::text, m_of_n, beneficiaries, approvers, release_conditions, status::text, last_heartbeat_at, pending_at, grace_deadline, conflict_hold_until, audit_head_hash FROM inheritance.policies WHERE policy_id = $1 AND is_deleted = false FOR UPDATE",
+    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<Value>, Value, Value, Option<Value>, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<Vec<u8>>, Option<String>, Option<Vec<u8>>)>(
+        r#"SELECT 
+            p.policy_id, p.owner_id, p.policy_type::text, p.cadence::text, p.m_of_n, p.beneficiaries, p.approvers, p.release_conditions, p.status::text, p.last_heartbeat_at, p.pending_at, p.grace_deadline, p.conflict_hold_until, p.audit_head_hash, p.label, per.enc_legal_name
+        FROM inheritance.policies p
+        LEFT JOIN auth_ext.person_user_links pul ON pul.user_id = p.owner_id
+        LEFT JOIN auth_ext.persons per ON per.person_id = pul.person_id
+        WHERE p.policy_id = $1 AND p.is_deleted = false FOR UPDATE"#,
     )
     .bind(policy_id)
     .fetch_one(tx.as_mut())
@@ -149,6 +167,8 @@ pub async fn fetch_policy_for_update_tx(
         grace_deadline: row.11,
         conflict_hold_until: row.12,
         audit_head_hash: row.13,
+        label: row.14,
+        enc_owner_name: row.15,
     })
 }
 

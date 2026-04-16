@@ -1,6 +1,6 @@
+use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
-use serde_json::Value;
 
 pub async fn insert_totp_factor(
     pool: &PgPool,

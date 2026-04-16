@@ -34,7 +34,10 @@ pub async fn send_password_recovery(config: &Config, email: &str) -> Result<(), 
     let res = client
         .post(url)
         .header("apikey", config.supabase_publishable_key.as_str())
-        .header("Authorization", format!("Bearer {}", config.supabase_publishable_key))
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.supabase_publishable_key),
+        )
         .json(&RecoverRequest { email })
         .send()
         .await
@@ -52,18 +55,26 @@ pub async fn refresh_session(
     refresh_token: &str,
 ) -> Result<RefreshResponse, SupabaseError> {
     let client = Client::new();
-    let url = format!("{}/auth/v1/token?grant_type=refresh_token", config.supabase_url);
+    let url = format!(
+        "{}/auth/v1/token?grant_type=refresh_token",
+        config.supabase_url
+    );
     let res = client
         .post(url)
         .header("apikey", config.supabase_publishable_key.as_str())
-        .header("Authorization", format!("Bearer {}", config.supabase_publishable_key))
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.supabase_publishable_key),
+        )
         .json(&RefreshRequest { refresh_token })
         .send()
         .await
         .map_err(|_| SupabaseError::Http)?;
 
     if res.status().is_success() {
-        res.json::<RefreshResponse>().await.map_err(|_| SupabaseError::Unexpected)
+        res.json::<RefreshResponse>()
+            .await
+            .map_err(|_| SupabaseError::Unexpected)
     } else {
         Err(SupabaseError::Unexpected)
     }
@@ -105,6 +116,36 @@ pub async fn reset_password_with_token(
 
     if res.status().is_success() {
         Ok(())
+    } else {
+        Err(SupabaseError::Unexpected)
+    }
+}
+
+pub async fn generate_recovery_link(config: &Config, email: &str) -> Result<String, SupabaseError> {
+    let client = Client::new();
+    let url = format!("{}/auth/v1/admin/generate_link", config.supabase_url);
+    let res = client
+        .post(url)
+        .header("apikey", config.supabase_secret_key.as_str())
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.supabase_secret_key),
+        )
+        .json(&serde_json::json!({
+            "type": "recovery",
+            "email": email
+        }))
+        .send()
+        .await
+        .map_err(|_| SupabaseError::Http)?;
+
+    if res.status().is_success() {
+        let body: serde_json::Value = res.json().await.map_err(|_| SupabaseError::Unexpected)?;
+        let link = body
+            .get("action_link")
+            .and_then(|v| v.as_str())
+            .ok_or(SupabaseError::Unexpected)?;
+        Ok(link.to_string())
     } else {
         Err(SupabaseError::Unexpected)
     }

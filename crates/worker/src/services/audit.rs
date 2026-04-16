@@ -1,5 +1,5 @@
-use serde_json::Value;
 use base64::Engine as _;
+use serde_json::Value;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
@@ -36,7 +36,8 @@ pub async fn append_event(
         "payload_hash": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&payload_hash),
         "prev_hash": prev_hash.as_ref().map(|h| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(h)),
     });
-    let event_hash_bytes = canonicalize(&event_hash_payload).map_err(|_| AuditError::Serialization)?;
+    let event_hash_bytes =
+        canonicalize(&event_hash_payload).map_err(|_| AuditError::Serialization)?;
     let event_hash = sha256(&event_hash_bytes);
 
     sqlx::query(

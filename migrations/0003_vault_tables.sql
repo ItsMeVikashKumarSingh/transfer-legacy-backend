@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS vault.items (
+CREATE TABLE IF NOT EXISTS core.items (
     item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     ciphertext BYTEA NOT NULL,
@@ -17,11 +17,11 @@ CREATE TABLE IF NOT EXISTS vault.items (
     version INTEGER NOT NULL DEFAULT 1
 );
 
-CREATE INDEX IF NOT EXISTS idx_vault_items_user_id ON vault.items(user_id);
+CREATE INDEX IF NOT EXISTS idx_core_items_user_id ON core.items(user_id);
 
-CREATE TABLE IF NOT EXISTS vault.shares (
+CREATE TABLE IF NOT EXISTS core.shares (
     share_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    item_id UUID NOT NULL REFERENCES vault.items(item_id) ON DELETE CASCADE,
+    item_id UUID NOT NULL REFERENCES core.items(item_id) ON DELETE CASCADE,
     owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     grantee_id UUID NOT NULL,
     envelope BYTEA NOT NULL,
@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS vault.shares (
     version INTEGER NOT NULL DEFAULT 1
 );
 
-CREATE INDEX IF NOT EXISTS idx_vault_shares_owner_id ON vault.shares(owner_id);
-CREATE INDEX IF NOT EXISTS idx_vault_shares_grantee_id ON vault.shares(grantee_id);
-CREATE INDEX IF NOT EXISTS idx_vault_shares_item_id ON vault.shares(item_id);
+CREATE INDEX IF NOT EXISTS idx_core_shares_owner_id ON core.shares(owner_id);
+CREATE INDEX IF NOT EXISTS idx_core_shares_grantee_id ON core.shares(grantee_id);
+CREATE INDEX IF NOT EXISTS idx_core_shares_item_id ON core.shares(item_id);
 
 COMMIT;

@@ -30,15 +30,16 @@ pub async fn export_gdpr(
     headers: HeaderMap,
     AeadJson(payload): AeadJson<GdprExportRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     require_idempotency(&state, &headers)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
 
     let key = URL_SAFE_NO_PAD
         .decode(payload.export_key_b64)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
     if key.len() != 32 {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid));
     }
 
     let person = sqlx::query_as::<_, (Uuid, Vec<u8>, Vec<u8>, String)>(
@@ -47,7 +48,7 @@ pub async fn export_gdpr(
     .bind(payload.person_id)
     .fetch_one(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
 
     let links = sqlx::query_as::<_, (Uuid, Uuid)>(
         "SELECT person_id, user_id FROM auth_ext.person_user_links WHERE person_id = $1",
@@ -55,11 +56,11 @@ pub async fn export_gdpr(
     .bind(payload.person_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let linked = links.iter().any(|row| row.1 == payload.user_id);
     if !linked {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
     }
 
     let devices = sqlx::query_as::<_, (Uuid, Vec<u8>, Option<serde_json::Value>)>(
@@ -68,7 +69,7 @@ pub async fn export_gdpr(
     .bind(payload.user_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let opaque = sqlx::query_as::<_, (Uuid, Vec<u8>, Vec<u8>, serde_json::Value)>(
         "SELECT user_id, opaque_record, emk_blob, argon2_params FROM auth_ext.opaque_records WHERE user_id = $1 AND is_deleted = false",
@@ -76,7 +77,7 @@ pub async fn export_gdpr(
     .bind(payload.user_id)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let vault_items = sqlx::query_as::<_, (Uuid, Vec<u8>, Option<serde_json::Value>)>(
         "SELECT item_id, ciphertext, item_meta FROM vault.items WHERE user_id = $1 AND is_deleted = false",
@@ -84,7 +85,7 @@ pub async fn export_gdpr(
     .bind(payload.user_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let vault_shares = sqlx::query_as::<_, (Uuid, Uuid, Vec<u8>, Vec<u8>)>(
         "SELECT share_id, item_id, envelope, grant_sig FROM vault.shares WHERE owner_id = $1 AND is_deleted = false",
@@ -92,7 +93,7 @@ pub async fn export_gdpr(
     .bind(payload.user_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let policies = sqlx::query_as::<_, (Uuid, String, String, serde_json::Value, serde_json::Value, Option<serde_json::Value>, String)>(
         "SELECT policy_id, policy_type::text, cadence::text, beneficiaries, approvers, release_conditions, status::text FROM inheritance.policies WHERE owner_id = $1 AND is_deleted = false",
@@ -100,7 +101,7 @@ pub async fn export_gdpr(
     .bind(payload.user_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let claims = sqlx::query_as::<_, (Uuid, Uuid, String, String)>(
         "SELECT claim_id, policy_id, claim_type::text, status::text FROM inheritance.claims WHERE claimant_person_id = $1",
@@ -108,7 +109,7 @@ pub async fn export_gdpr(
     .bind(payload.person_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let attestations = sqlx::query_as::<_, (Uuid, Uuid, Uuid, serde_json::Value)>(
         "SELECT attestation_id, policy_id, claim_id, statement FROM inheritance.attestations WHERE approver_person_id = $1",
@@ -116,7 +117,7 @@ pub async fn export_gdpr(
     .bind(payload.person_id)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let export = serde_json::json!({
         "person": {
@@ -172,10 +173,10 @@ pub async fn export_gdpr(
     });
 
     let plaintext = serde_json::to_vec(&export)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
     let aad = payload.user_id.as_bytes();
     let envelope = aead::encrypt(&key, &plaintext, aad)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let response = GdprExportResponse {
         nonce_b64: URL_SAFE_NO_PAD.encode(envelope.nonce),
@@ -184,9 +185,10 @@ pub async fn export_gdpr(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: response,
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: rid,
     };
-    let aead = wrap_response(&state, &headers, &envelope)?;
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
 }
 
@@ -207,12 +209,13 @@ pub async fn erase_gdpr(
     headers: HeaderMap,
     AeadJson(payload): AeadJson<GdprEraseRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     require_idempotency(&state, &headers)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
 
     let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let linked = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM auth_ext.person_user_links WHERE person_id = $1 AND user_id = $2",
@@ -221,72 +224,73 @@ pub async fn erase_gdpr(
     .bind(payload.user_id)
     .fetch_one(tx.as_mut())
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
     if linked == 0 {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
     }
 
     sqlx::query("UPDATE vault.items SET ciphertext = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE vault.shares SET envelope = ''::bytea, grant_sig = ''::bytea, is_deleted = true, deleted_at = now() WHERE owner_id = $1")
         .bind(payload.user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE auth_ext.opaque_records SET opaque_record = ''::bytea, emk_blob = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE auth_ext.devices SET ed25519_pubkey = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE auth_ext.mfa_factors SET enabled = false, totp_secret_enc = ''::bytea, is_deleted = true, deleted_at = now() WHERE user_id = $1")
         .bind(payload.user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE inheritance.policies SET beneficiaries = '[]'::jsonb, approvers = '[]'::jsonb, release_conditions = NULL, is_deleted = true, deleted_at = now() WHERE owner_id = $1")
         .bind(payload.user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE inheritance.claim_attachments SET object_key = '', status = 'rejected' WHERE claim_id IN (SELECT claim_id FROM inheritance.claims WHERE claimant_person_id = $1)")
         .bind(payload.person_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("UPDATE auth_ext.persons SET enc_legal_name = ''::bytea, enc_email = ''::bytea, is_deleted = true, deleted_at = now() WHERE person_id = $1")
         .bind(payload.person_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     sqlx::query("DELETE FROM auth_ext.person_user_links WHERE person_id = $1")
         .bind(payload.person_id)
         .execute(tx.as_mut())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: GdprEraseResponse { status: "ok" },
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: rid,
     };
-    let aead = wrap_response(&state, &headers, &envelope)?;
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
 }

@@ -12,6 +12,7 @@ pub struct HealthResponse {
 }
 
 pub async fn health(Extension(request_id): Extension<RequestId>) -> Json<crate::errors::SuccessEnvelope<HealthResponse>> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     let version = option_env!("GIT_SHA").unwrap_or("unknown");
-    success(&request_id, HealthResponse { status: "ok", version })
+    success(&rid, HealthResponse { status: "ok", version })
 }

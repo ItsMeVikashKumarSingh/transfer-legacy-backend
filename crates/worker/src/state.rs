@@ -2,7 +2,10 @@ use apalis_redis::RedisStorage;
 use sqlx::PgPool;
 
 use crate::config::Config;
-use crate::jobs::{AuditAnchorJob, ConflictCheckJob, HeartbeatEvalJob, NotifyJob, ReleaseDeliveryJob, ReleaseEvalJob};
+use crate::jobs::{
+    AuditAnchorJob, ConflictCheckJob, HeartbeatEvalJob, NotifyJob, ReleaseDeliveryJob,
+    ReleaseEvalJob,
+};
 
 #[derive(Clone)]
 pub struct AppState {

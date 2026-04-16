@@ -65,18 +65,25 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Attestation</span>
-        <h1>Attestation requested</h1>
+        <h1>Attestation needed for "{{params.policy_name}}"</h1>
         <p>
-          An attestation is required for a {{params.brand_name}} claim. Please
-          review the request and submit your attestation.
+          An attestation has been requested regarding <strong>{{params.owner_name}}</strong>'s policy in {{params.brand_name}}. 
+          As a designated trustee, please review the evidence and submit your response.
         </p>
         <a class="cta" href="{{params.app_url}}/attestations">
-          Submit Attestation
+          Review & Submit Attestation
         </a>
       </div>
       <div class="footer">
-        You are receiving this notification because you are an approver in
-        {{params.brand_name}}.
+        <p>
+          You are receiving this notification because you are a trusted approver in
+          {{params.owner_name}}'s plan.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          We provide secure, non-custodial digital inheritance solutions. 
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> to learn more.
+        </p>
       </div>
     </div>
   </body>

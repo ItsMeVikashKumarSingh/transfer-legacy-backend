@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
-use sqlx::postgres::PgPoolOptions;
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use apalis::prelude::{Monitor, TokioExecutor, WorkerBuilder, WorkerFactoryFn};
+use sqlx::postgres::PgPoolOptions;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use transfer_legacy_worker::config::Config;
 use transfer_legacy_worker::jobs;
@@ -12,11 +12,13 @@ use transfer_legacy_worker::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
+    dotenvy::from_filename(".env.local").ok();
+    dotenvy::dotenv().ok();
     init_tracing();
     lock_memory_pages();
     tracing::info!("worker starting");
 
-    let config = Config::from_env().map_err(|_| std::io::Error::other("config error"))?;
+    let config = Config::load().await.map_err(|e| std::io::Error::other(format!("config error: {}", e)))?;
     let db = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url)
@@ -98,7 +100,7 @@ fn init_tracing() {
 fn lock_memory_pages() {
     #[cfg(unix)]
     {
-        use nix::sys::mman::{MlockAllFlags, mlockall};
+        use nix::sys::mman::{mlockall, MlockAllFlags};
         if let Err(err) = mlockall(MlockAllFlags::MCL_CURRENT | MlockAllFlags::MCL_FUTURE) {
             tracing::warn!("mlockall unavailable: {err}");
         } else {

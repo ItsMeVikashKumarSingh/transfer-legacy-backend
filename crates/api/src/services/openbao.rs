@@ -22,7 +22,11 @@ struct SignResponse {
     data: SignResponseData,
 }
 
-pub async fn sign_digest(config: &Config, key_name: &str, digest: &[u8]) -> Result<String, OpenBaoError> {
+pub async fn sign_digest(
+    config: &Config,
+    key_name: &str,
+    digest: &[u8],
+) -> Result<String, OpenBaoError> {
     let client = Client::new();
     let url = format!("{}/v1/transit/sign/{}", config.openbao_addr, key_name);
     let input_b64 = STANDARD.encode(digest);

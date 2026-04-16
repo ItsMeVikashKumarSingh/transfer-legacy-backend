@@ -4,7 +4,7 @@ members = [
   "crates/worker",
   "crates/crypto-core",
   "crates/shared-types"
-]
+, "crates/infra-tool"]
 resolver = "2"
 
 [workspace.package]

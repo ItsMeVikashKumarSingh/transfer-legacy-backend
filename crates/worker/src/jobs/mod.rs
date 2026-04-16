@@ -8,7 +8,11 @@ use uuid::Uuid;
 
 use crate::services::{audit, b2, brevo, notify_log, openbao};
 use crate::state::AppState;
-use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize};
+use transfer_legacy_crypto_core::{
+    aead::{decrypt, Key},
+    hash::sha256,
+    jcs::canonicalize,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatEvalJob {
@@ -99,39 +103,54 @@ pub async fn run_heartbeat_eval(
     enqueue_owner_reminders(pool, &state, now).await?;
 
     let mut tx = pool.begin().await.map_err(|_| JobError::Database)?;
-    let pending_rows = sqlx::query_as::<_, (Uuid, Uuid, DateTime<Utc>, DateTime<Utc>, String)>(
-        "UPDATE inheritance.policies SET status = 'pending', updated_at = now() WHERE status = 'active' AND pending_at <= now() AND is_deleted = false RETURNING policy_id, owner_id, pending_at, grace_deadline, cadence::text",
+    let pending_rows = sqlx::query_as::<_, (Uuid, Uuid, DateTime<Utc>, DateTime<Utc>, String, String, String)>(
+        "UPDATE inheritance.policies p SET status = 'pending', updated_at = now() 
+         FROM auth_ext.persons pr 
+         WHERE p.status = 'active' AND p.pending_at <= now() AND p.is_deleted = false AND pr.user_id = p.owner_id
+         RETURNING p.policy_id, p.owner_id, p.pending_at, p.grace_deadline, p.cadence::text, p.label, pr.enc_legal_name",
     )
     .fetch_all(tx.as_mut())
     .await
     .map_err(|_| JobError::Database)?;
 
     for row in pending_rows {
-        let lag = (now - row.2).num_seconds().max(0) as f64;
+        let policy_id = row.0;
+        let owner_id = row.1;
+        let pending_at = row.2;
+        let grace_deadline = row.3;
+        let policy_name = row.5;
+        let enc_owner_name = row.6;
+
+        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+            .unwrap_or_else(|_| "Policy Owner".to_string());
+
+        let lag = (now - pending_at).num_seconds().max(0) as f64;
         histogram!("heartbeat_worker_lag_seconds").record(lag);
         let payload = serde_json::json!({
-            "policy_id": row.0,
+            "policy_id": policy_id,
             "status": "pending",
-            "pending_at": row.2,
-            "grace_deadline": row.3,
+            "pending_at": pending_at,
+            "grace_deadline": grace_deadline,
         });
-        audit::append_event(&mut tx, row.0, "policy_pending", &payload)
+        audit::append_event(&mut tx, policy_id, "policy_pending", &payload)
             .await
             .map_err(|_| JobError::Audit)?;
 
-        if let Some(email) = fetch_user_email(pool, row.1).await {
+        if let Some(email) = fetch_user_email(pool, owner_id).await {
             let params = serde_json::json!({
                 "brand_name": state.config.brand_name.clone(),
                 "app_url": state.config.app_url.clone(),
-                "policy_id": row.0,
-                "pending_at": row.2,
-                "grace_deadline": row.3,
+                "policy_id": policy_id,
+                "pending_at": pending_at,
+                "grace_deadline": grace_deadline,
+                "owner_name": owner_name,
+                "policy_name": policy_name,
             });
-            let dedupe_key = format!("owner-pending-{}-{}", row.0, now.date_naive());
+            let dedupe_key = format!("owner-pending-{}-{}", policy_id, now.date_naive());
             enqueue_notify(
                 &state,
                 NotifyJob {
-                    policy_id: Some(row.0),
+                    policy_id: Some(policy_id),
                     email,
                     template_id: state.config.brevo_owner_reminder_daily_template_id.clone(),
                     params,
@@ -143,33 +162,48 @@ pub async fn run_heartbeat_eval(
         }
     }
 
-    let investigating_rows = sqlx::query_as::<_, (Uuid, serde_json::Value, serde_json::Value)>(
-        "UPDATE inheritance.policies SET status = 'investigating', updated_at = now() WHERE status = 'pending' AND grace_deadline <= now() AND is_deleted = false RETURNING policy_id, beneficiaries, approvers",
+    let investigating_rows = sqlx::query_as::<_, (Uuid, Uuid, serde_json::Value, serde_json::Value, String, String)>(
+        "UPDATE inheritance.policies p SET status = 'investigating', updated_at = now() 
+         FROM auth_ext.persons pr 
+         WHERE p.status = 'pending' AND p.grace_deadline <= now() AND p.is_deleted = false AND pr.user_id = p.owner_id
+         RETURNING p.policy_id, p.owner_id, p.beneficiaries, p.approvers, p.label, pr.enc_legal_name",
     )
     .fetch_all(tx.as_mut())
     .await
     .map_err(|_| JobError::Database)?;
 
     for row in investigating_rows {
+        let policy_id = row.0;
+        let owner_id = row.1;
+        let beneficiaries = row.2;
+        let approvers = row.3;
+        let policy_name = row.4;
+        let enc_owner_name = row.5;
+
+        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+            .unwrap_or_else(|_| "Policy Owner".to_string());
+
         let payload = serde_json::json!({
-            "policy_id": row.0,
+            "policy_id": policy_id,
             "status": "investigating",
         });
-        audit::append_event(&mut tx, row.0, "policy_investigating", &payload)
+        audit::append_event(&mut tx, policy_id, "policy_investigating", &payload)
             .await
             .map_err(|_| JobError::Audit)?;
 
-        for email in extract_emails(&row.1) {
+        for email in extract_emails(&beneficiaries) {
             let params = serde_json::json!({
                 "brand_name": state.config.brand_name.clone(),
                 "app_url": state.config.app_url.clone(),
-                "policy_id": row.0,
+                "policy_id": policy_id,
+                "owner_name": owner_name,
+                "policy_name": policy_name,
             });
-            let dedupe_key = format!("beneficiary-investigating-{}-{}", row.0, email);
+            let dedupe_key = format!("beneficiary-investigating-{}-{}", policy_id, email);
             enqueue_notify(
                 &state,
                 NotifyJob {
-                    policy_id: Some(row.0),
+                    policy_id: Some(policy_id),
                     email,
                     template_id: state.config.brevo_beneficiary_claim_template_id.clone(),
                     params,
@@ -180,17 +214,19 @@ pub async fn run_heartbeat_eval(
             .await?;
         }
 
-        for email in extract_emails(&row.2) {
+        for email in extract_emails(&approvers) {
             let params = serde_json::json!({
                 "brand_name": state.config.brand_name.clone(),
                 "app_url": state.config.app_url.clone(),
-                "policy_id": row.0,
+                "policy_id": policy_id,
+                "owner_name": owner_name,
+                "policy_name": policy_name,
             });
-            let dedupe_key = format!("approver-investigating-{}-{}", row.0, email);
+            let dedupe_key = format!("approver-investigating-{}-{}", policy_id, email);
             enqueue_notify(
                 &state,
                 NotifyJob {
-                    policy_id: Some(row.0),
+                    policy_id: Some(policy_id),
                     email,
                     template_id: state.config.brevo_approver_attestation_template_id.clone(),
                     params,
@@ -206,10 +242,7 @@ pub async fn run_heartbeat_eval(
     Ok(())
 }
 
-pub async fn run_notify(
-    job: NotifyJob,
-    state: Data<AppState>,
-) -> Result<(), JobError> {
+pub async fn run_notify(job: NotifyJob, state: Data<AppState>) -> Result<(), JobError> {
     let queued = notify_log::insert_queued(
         &state.db,
         job.policy_id,
@@ -224,20 +257,16 @@ pub async fn run_notify(
         return Ok(());
     }
 
-    let result = brevo::send_template_email(
-        &state.config,
-        &job.template_id,
-        &job.email,
-        job.params,
-    )
-    .await;
+    let result =
+        brevo::send_template_email(&state.config, &job.template_id, &job.email, job.params).await;
 
     match result {
         Ok(_) => notify_log::mark_sent(&state.db, &job.dedupe_key)
             .await
             .map_err(|_| JobError::Database)?,
         Err(err) => {
-            counter!("api_errors_total", "route" => "worker_notify", "status" => "500").increment(1);
+            counter!("api_errors_total", "route" => "worker_notify", "status" => "500")
+                .increment(1);
             let msg = format!("{:?}", err);
             notify_log::mark_failed(&state.db, &job.dedupe_key, &msg)
                 .await
@@ -249,10 +278,7 @@ pub async fn run_notify(
     Ok(())
 }
 
-pub async fn run_audit_anchor(
-    job: AuditAnchorJob,
-    state: Data<AppState>,
-) -> Result<(), JobError> {
+pub async fn run_audit_anchor(job: AuditAnchorJob, state: Data<AppState>) -> Result<(), JobError> {
     let entries: Vec<Vec<u8>> = sqlx::query_scalar(
         "SELECT event_hash FROM audit.events WHERE created_at::date = $1 ORDER BY created_at ASC",
     )
@@ -309,10 +335,7 @@ pub async fn run_audit_anchor(
     Ok(())
 }
 
-pub async fn run_release_eval(
-    _: ReleaseEvalJob,
-    state: Data<AppState>,
-) -> Result<(), JobError> {
+pub async fn run_release_eval(_: ReleaseEvalJob, state: Data<AppState>) -> Result<(), JobError> {
     gauge!("job_queue_depth", "job_type" => "release_eval").set(0.0);
     let rows = sqlx::query_as::<_, (Uuid, serde_json::Value, Uuid)>(
         "SELECT p.policy_id, p.m_of_n, c.claim_id FROM inheritance.policies p JOIN inheritance.claims c ON c.policy_id = p.policy_id WHERE p.policy_type = 'm_of_n' AND p.status = 'investigating' AND c.status = 'confirmed'",
@@ -423,14 +446,12 @@ pub async fn run_conflict_check(
         .await
         .map_err(|_| JobError::Database)?;
 
-        sqlx::query(
-            "INSERT INTO ops.manual_reviews (review_id, policy_id) VALUES ($1,$2)",
-        )
-        .bind(Uuid::new_v4())
-        .bind(row.0)
-        .execute(tx.as_mut())
-        .await
-        .map_err(|_| JobError::Database)?;
+        sqlx::query("INSERT INTO ops.manual_reviews (review_id, policy_id) VALUES ($1,$2)")
+            .bind(Uuid::new_v4())
+            .bind(row.0)
+            .execute(tx.as_mut())
+            .await
+            .map_err(|_| JobError::Database)?;
 
         let payload = serde_json::json!({
             "policy_id": row.0,
@@ -449,46 +470,60 @@ pub async fn run_release_delivery(
     _: ReleaseDeliveryJob,
     state: Data<AppState>,
 ) -> Result<(), JobError> {
-    let rows = sqlx::query_as::<_, (Uuid, serde_json::Value)>(
-        "SELECT policy_id, beneficiaries FROM inheritance.policies WHERE status = 'release_ready' AND conflict_hold_until <= now()",
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, serde_json::Value, String, String)>(
+        "SELECT p.policy_id, p.owner_id, p.beneficiaries, p.label, pr.enc_legal_name 
+         FROM inheritance.policies p 
+         JOIN auth_ext.persons pr ON pr.user_id = p.owner_id
+         WHERE p.status = 'release_ready' AND p.conflict_hold_until <= now()",
     )
     .fetch_all(&state.db)
     .await
     .map_err(|_| JobError::Database)?;
 
     for row in rows {
+        let policy_id = row.0;
+        let owner_id = row.1;
+        let beneficiaries = row.2;
+        let policy_name = row.3;
+        let enc_owner_name = row.4;
+
+        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+            .unwrap_or_else(|_| "Policy Owner".to_string());
+
         let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
         let updated = sqlx::query(
             "UPDATE inheritance.policies SET status = 'released', updated_at = now() WHERE policy_id = $1 AND status = 'release_ready'",
         )
-        .bind(row.0)
+        .bind(policy_id)
         .execute(tx.as_mut())
         .await
         .map_err(|_| JobError::Database)?;
 
         if updated.rows_affected() > 0 {
             let payload = serde_json::json!({
-                "policy_id": row.0,
+                "policy_id": policy_id,
                 "status": "released",
             });
-            audit::append_event(&mut tx, row.0, "policy_released", &payload)
+            audit::append_event(&mut tx, policy_id, "policy_released", &payload)
                 .await
                 .map_err(|_| JobError::Audit)?;
         }
 
         tx.commit().await.map_err(|_| JobError::Database)?;
 
-        for email in extract_emails(&row.1) {
+        for email in extract_emails(&beneficiaries) {
             let params = serde_json::json!({
                 "brand_name": state.config.brand_name.clone(),
                 "app_url": state.config.app_url.clone(),
-                "policy_id": row.0,
+                "policy_id": policy_id,
+                "owner_name": owner_name.clone(),
+                "policy_name": policy_name.clone(),
             });
-            let dedupe_key = format!("release-ready-{}-{}", row.0, email);
+            let dedupe_key = format!("release-ready-{}-{}", policy_id, email);
             enqueue_notify(
                 &state,
                 NotifyJob {
-                    policy_id: Some(row.0),
+                    policy_id: Some(policy_id),
                     email,
                     template_id: state.config.brevo_release_ready_template_id.clone(),
                     params,
@@ -508,57 +543,76 @@ async fn enqueue_owner_reminders(
     state: &AppState,
     now: DateTime<Utc>,
 ) -> Result<(), JobError> {
-    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, DateTime<Utc>)>(
-        "SELECT policy_id, owner_id, cadence::text, pending_at FROM inheritance.policies WHERE status = 'active' AND pending_at IS NOT NULL AND is_deleted = false",
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, DateTime<Utc>, String, String)>(
+        "SELECT p.policy_id, p.owner_id, p.cadence::text, p.pending_at, p.label, pr.enc_legal_name 
+         FROM inheritance.policies p
+         JOIN auth_ext.persons pr ON pr.user_id = p.owner_id
+         WHERE p.status = 'active' AND p.pending_at IS NOT NULL AND p.is_deleted = false",
     )
     .fetch_all(pool)
     .await
     .map_err(|_| JobError::Database)?;
 
     for row in rows {
-        let cadence_days = cadence_days(&row.2);
+        let policy_id = row.0;
+        let owner_id = row.1;
+        let cadence_str = row.2;
+        let pending_at = row.3;
+        let policy_name = row.4;
+        let enc_owner_name = row.5;
+
+        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+            .unwrap_or_else(|_| "Policy Owner".to_string());
+
+        let cadence_days = cadence_days(&cadence_str);
         let early_offset = Duration::days((cadence_days as f64 * 0.2).ceil() as i64);
         let urgent_offset = Duration::days((cadence_days as f64 * 0.1).ceil() as i64);
         let daily_window = Duration::days(7.min(cadence_days as i64));
 
-        if now >= row.3 - early_offset {
+        if now >= pending_at - early_offset {
             enqueue_owner_notification(
                 pool,
                 state,
-                row.0,
-                row.1,
+                policy_id,
+                owner_id,
                 &state.config.brevo_owner_reminder_early_template_id,
                 "owner-early",
                 now,
-                row.3,
+                pending_at,
+                &owner_name,
+                &policy_name,
             )
             .await?;
         }
 
-        if now >= row.3 - urgent_offset {
+        if now >= pending_at - urgent_offset {
             enqueue_owner_notification(
                 pool,
                 state,
-                row.0,
-                row.1,
+                policy_id,
+                owner_id,
                 &state.config.brevo_owner_reminder_urgent_template_id,
                 "owner-urgent",
                 now,
-                row.3,
+                pending_at,
+                &owner_name,
+                &policy_name,
             )
             .await?;
         }
 
-        if now >= row.3 - daily_window && now < row.3 {
+        if now >= pending_at - daily_window && now < pending_at {
             enqueue_owner_notification(
                 pool,
                 state,
-                row.0,
-                row.1,
+                policy_id,
+                owner_id,
                 &state.config.brevo_owner_reminder_daily_template_id,
                 "owner-daily",
                 now,
-                row.3,
+                pending_at,
+                &owner_name,
+                &policy_name,
             )
             .await?;
         }
@@ -576,6 +630,8 @@ async fn enqueue_owner_notification(
     dedupe_prefix: &str,
     now: DateTime<Utc>,
     pending_at: DateTime<Utc>,
+    owner_name: &str,
+    policy_name: &str,
 ) -> Result<(), JobError> {
     if let Some(email) = fetch_user_email(pool, owner_id).await {
         let params = serde_json::json!({
@@ -583,6 +639,8 @@ async fn enqueue_owner_notification(
             "app_url": state.config.app_url.clone(),
             "policy_id": policy_id,
             "pending_at": pending_at,
+            "owner_name": owner_name,
+            "policy_name": policy_name,
         });
         let dedupe_key = format!("{}-{}-{}", dedupe_prefix, policy_id, now.date_naive());
         enqueue_notify(
@@ -603,7 +661,10 @@ async fn enqueue_owner_notification(
 
 async fn enqueue_notify(state: &AppState, job: NotifyJob) -> Result<(), JobError> {
     let mut notify_storage = state.notify_storage.clone();
-    notify_storage.push(job).await.map_err(|_| JobError::Storage)?;
+    notify_storage
+        .push(job)
+        .await
+        .map_err(|_| JobError::Storage)?;
     Ok(())
 }
 
@@ -620,7 +681,11 @@ fn extract_emails(value: &serde_json::Value) -> Vec<String> {
         .as_array()
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| v.get("email").and_then(|e| e.as_str()).map(|s| s.to_string()))
+                .filter_map(|v| {
+                    v.get("email")
+                        .and_then(|e| e.as_str())
+                        .map(|s| s.to_string())
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -634,4 +699,13 @@ fn cadence_days(cadence: &str) -> i64 {
         "3m" => 90,
         _ => 30,
     }
+}
+
+fn decrypt_owner_name(key_b64: &str, enc_name_b64: &str, owner_id: Uuid) -> anyhow::Result<String> {
+    let key_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(key_b64)?;
+    let key = Key::from_slice(&key_bytes);
+    let enc_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(enc_name_b64)?;
+    let aad = owner_id.as_bytes();
+    let name_bytes = decrypt(key, &enc_bytes, Some(aad)).map_err(|_| anyhow::anyhow!("Decryption failed"))?;
+    Ok(String::from_utf8(name_bytes)?)
 }

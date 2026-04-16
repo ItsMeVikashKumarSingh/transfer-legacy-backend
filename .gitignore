@@ -24,6 +24,7 @@ logs
 *.swo
 *.swn
 infra/openbao/data/
+infra/openbao/*.local.txt
 *.sln
 *.suo
 *.ntvs_analysis.dat

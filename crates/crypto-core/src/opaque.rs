@@ -1,16 +1,8 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use opaque_ke::{
-    ciphersuite::CipherSuite,
-    CredentialRequest,
-    CredentialResponse,
-    RegistrationRequest,
-    RegistrationResponse,
-    RegistrationUpload,
-    ServerLogin,
-    ServerLoginStartResult,
-    ServerLoginParameters,
-    ServerRegistration,
-    ServerSetup,
+    ciphersuite::CipherSuite, CredentialRequest, CredentialResponse, RegistrationRequest,
+    RegistrationResponse, RegistrationUpload, ServerLogin, ServerLoginParameters,
+    ServerLoginStartResult, ServerRegistration, ServerSetup,
 };
 use rand::rngs::OsRng;
 use sha2::Sha512;
@@ -62,8 +54,8 @@ pub fn registration_start(
         .map_err(|_| OpaqueError::Base64)?;
     let req = RegistrationRequest::<DefaultSuite>::deserialize(&req_bytes)
         .map_err(|_| OpaqueError::Serialization)?;
-    let resp = ServerRegistration::start(setup, req.clone(), b"")
-        .map_err(|_| OpaqueError::Protocol)?;
+    let resp =
+        ServerRegistration::start(setup, req.clone(), b"").map_err(|_| OpaqueError::Protocol)?;
     let resp_bytes = resp.message.serialize();
     Ok((URL_SAFE_NO_PAD.encode(resp_bytes), req))
 }
@@ -137,10 +129,14 @@ pub fn deserialize_registration_request(
     bincode::deserialize(bytes).map_err(|_| OpaqueError::Serialization)
 }
 
-pub fn serialize_credential_response(resp: &CredentialResponse<DefaultSuite>) -> Result<Vec<u8>, OpaqueError> {
+pub fn serialize_credential_response(
+    resp: &CredentialResponse<DefaultSuite>,
+) -> Result<Vec<u8>, OpaqueError> {
     bincode::serialize(resp).map_err(|_| OpaqueError::Serialization)
 }
 
-pub fn serialize_registration_response(resp: &RegistrationResponse<DefaultSuite>) -> Result<Vec<u8>, OpaqueError> {
+pub fn serialize_registration_response(
+    resp: &RegistrationResponse<DefaultSuite>,
+) -> Result<Vec<u8>, OpaqueError> {
     bincode::serialize(resp).map_err(|_| OpaqueError::Serialization)
 }

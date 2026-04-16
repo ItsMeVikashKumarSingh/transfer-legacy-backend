@@ -41,9 +41,10 @@ pub async fn list_reviews(
     headers: HeaderMap,
     Query(query): Query<ListReviewsQuery>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     let rows = list_manual_reviews(&state.db, query.status.as_deref())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let data: Vec<ReviewSummary> = rows
         .into_iter()
@@ -59,9 +60,10 @@ pub async fn list_reviews(
 
     let envelope = crate::errors::SuccessEnvelope {
         data,
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: rid,
     };
-    let aead = wrap_response(&state, &headers, &envelope)?;
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
 }
 
@@ -71,9 +73,10 @@ pub async fn get_review(
     headers: HeaderMap,
     Path(review_id): Path<Uuid>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     let row = fetch_manual_review(&state.db, review_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ReviewDetail {
@@ -85,8 +88,9 @@ pub async fn get_review(
             created_at: row.created_at,
             resolved_at: row.resolved_at,
         },
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: rid,
     };
-    let aead = wrap_response(&state, &headers, &envelope)?;
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
 }

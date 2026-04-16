@@ -58,13 +58,11 @@ pub async fn update_policy_audit_head(
     policy_id: Uuid,
     audit_head_hash: Vec<u8>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE inheritance.policies SET audit_head_hash = $1 WHERE policy_id = $2",
-    )
-    .bind(audit_head_hash)
-    .bind(policy_id)
-    .execute(tx.as_mut())
-    .await?;
+    sqlx::query("UPDATE inheritance.policies SET audit_head_hash = $1 WHERE policy_id = $2")
+        .bind(audit_head_hash)
+        .bind(policy_id)
+        .execute(tx.as_mut())
+        .await?;
     Ok(())
 }
 

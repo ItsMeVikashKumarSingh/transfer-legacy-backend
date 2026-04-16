@@ -62,14 +62,12 @@ pub async fn update_claim_status_tx(
     status: &str,
     confirmed_at: Option<DateTime<Utc>>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE inheritance.claims SET status = $1, confirmed_at = $2 WHERE claim_id = $3",
-    )
-    .bind(status)
-    .bind(confirmed_at)
-    .bind(claim_id)
-    .execute(tx.as_mut())
-    .await?;
+    sqlx::query("UPDATE inheritance.claims SET status = $1, confirmed_at = $2 WHERE claim_id = $3")
+        .bind(status)
+        .bind(confirmed_at)
+        .bind(claim_id)
+        .execute(tx.as_mut())
+        .await?;
     Ok(())
 }
 
@@ -185,10 +183,7 @@ pub async fn fetch_policy_approvers(
     Ok(row)
 }
 
-pub async fn fetch_claim_policy(
-    pool: &PgPool,
-    claim_id: Uuid,
-) -> Result<Uuid, sqlx::Error> {
+pub async fn fetch_claim_policy(pool: &PgPool, claim_id: Uuid) -> Result<Uuid, sqlx::Error> {
     let row = sqlx::query_scalar::<_, Uuid>(
         "SELECT policy_id FROM inheritance.claims WHERE claim_id = $1",
     )

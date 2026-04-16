@@ -10,5 +10,8 @@ fn aead_tamper_is_rejected() {
     tampered[0] ^= 0x80;
 
     let err = decrypt(&key, &envelope.nonce, &tampered, aad).expect_err("tamper must fail");
-    assert!(matches!(err, transfer_legacy_crypto_core::aead::AeadError::Decrypt));
+    assert!(matches!(
+        err,
+        transfer_legacy_crypto_core::aead::AeadError::Decrypt
+    ));
 }

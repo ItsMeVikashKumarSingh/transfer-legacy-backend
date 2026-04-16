@@ -78,14 +78,14 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Invitation</span>
-        <h1>You have been invited to {{params.brand_name}}</h1>
+        <h1>Invitation to {{params.policy_name}}</h1>
         <p>
-          A policy owner has invited you to join their inheritance plan. Use the
-          button below to accept the invite.
+          {{params.owner_name}} has invited you to join their inheritance plan <strong>"{{params.policy_name}}"</strong>. 
+          Use the button below to accept the invite.
         </p>
         <a
           class="cta"
-          href="{{params.app_url}}/invite/claim?invite_id={{params.invite_id}}&claim_token={{params.claim_token}}"
+          href="{{params.invite_url}}"
         >
           Accept Invitation
         </a>
@@ -101,8 +101,15 @@
         <p class="code">Claim Token: {{params.claim_token}}</p>
       </div>
       <div class="footer">
-        You are receiving this email because someone initiated a secure
-        inheritance invitation through {{params.brand_name}}.
+        <p>
+          You are receiving this email because {{params.owner_name}} initiated a secure
+          inheritance invitation through {{params.brand_name}}.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          Secure your digital assets for the next generation. 
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> to learn more.
+        </p>
       </div>
     </div>
   </body>

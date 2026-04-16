@@ -43,15 +43,16 @@ pub async fn stepup_request(
     headers: HeaderMap,
     Json(payload): Json<StepUpRequest>,
 ) -> Result<Json<crate::errors::SuccessEnvelope<StepUpResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     require_idempotency(&state, &headers)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
     let expires_at = Utc::now() + Duration::minutes(5);
     let challenge_id = create_stepup_challenge(&state.db, payload.user_id, &payload.challenge_type, &payload.action, expires_at)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
-    Ok(success(&request_id, StepUpResponse { challenge_id, expires_at }))
+    Ok(success(&rid, StepUpResponse { challenge_id, expires_at }))
 }
 
 pub async fn stepup_verify(
@@ -60,47 +61,50 @@ pub async fn stepup_verify(
     headers: HeaderMap,
     Json(payload): Json<StepUpVerifyRequest>,
 ) -> Result<Json<crate::errors::SuccessEnvelope<StepUpVerifyResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let config = state.config().await;
+
     require_idempotency(&state, &headers)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
     let challenge = fetch_stepup_challenge(&state.db, payload.challenge_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
 
     if challenge.consumed_at.is_some() || challenge.expires_at < Utc::now() {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
     }
 
     if challenge.challenge_type != "totp" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid));
     }
 
     let secret_enc = fetch_totp_secret(&state.db, challenge.user_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
     if secret_enc.len() < 24 {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid));
     }
     let (nonce, ciphertext) = secret_enc.split_at(24);
     let key = URL_SAFE_NO_PAD
-        .decode(state.config.server_aead_key_b64.as_str())
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .decode(config.server_aead_key_b64.as_str())
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
     let aad = challenge.user_id.as_bytes();
     let secret = decrypt(&key, nonce, ciphertext, aad)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret, Some("Transfer Legacy".into()), challenge.user_id.to_string())
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
     let valid = totp.check_current(&payload.code)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     if !valid {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &request_id));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
     }
 
     consume_stepup_challenge(&state.db, challenge.challenge_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
-    Ok(success(&request_id, StepUpVerifyResponse { status: "ok" }))
+    Ok(success(&rid, StepUpVerifyResponse { status: "ok" }))
 }

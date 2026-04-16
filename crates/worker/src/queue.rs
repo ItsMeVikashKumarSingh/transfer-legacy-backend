@@ -1,6 +1,9 @@
 use apalis_redis::RedisStorage;
 
-use crate::jobs::{AuditAnchorJob, ConflictCheckJob, HeartbeatEvalJob, NotifyJob, ReleaseDeliveryJob, ReleaseEvalJob};
+use crate::jobs::{
+    AuditAnchorJob, ConflictCheckJob, HeartbeatEvalJob, NotifyJob, ReleaseDeliveryJob,
+    ReleaseEvalJob,
+};
 
 #[derive(Clone)]
 pub struct Queues {

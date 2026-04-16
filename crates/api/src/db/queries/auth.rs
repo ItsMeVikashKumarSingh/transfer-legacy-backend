@@ -31,13 +31,11 @@ pub async fn insert_person_and_link(
     .execute(tx.as_mut())
     .await?;
 
-    sqlx::query(
-        "INSERT INTO auth_ext.person_user_links (person_id, user_id) VALUES ($1, $2)",
-    )
-    .bind(person_id)
-    .bind(user_id)
-    .execute(tx.as_mut())
-    .await?;
+    sqlx::query("INSERT INTO auth_ext.person_user_links (person_id, user_id) VALUES ($1, $2)")
+        .bind(person_id)
+        .bind(user_id)
+        .execute(tx.as_mut())
+        .await?;
 
     Ok(person_id)
 }

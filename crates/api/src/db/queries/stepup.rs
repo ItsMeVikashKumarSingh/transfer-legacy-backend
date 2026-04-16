@@ -33,7 +33,10 @@ pub async fn create_stepup_challenge(
     Ok(challenge_id)
 }
 
-pub async fn fetch_stepup_challenge(pool: &PgPool, challenge_id: Uuid) -> Result<StepUpRow, sqlx::Error> {
+pub async fn fetch_stepup_challenge(
+    pool: &PgPool,
+    challenge_id: Uuid,
+) -> Result<StepUpRow, sqlx::Error> {
     let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>)>(
         "SELECT challenge_id, user_id, challenge_type, action, expires_at, consumed_at FROM auth_ext.stepup_challenges WHERE challenge_id = $1",
     )
@@ -51,7 +54,10 @@ pub async fn fetch_stepup_challenge(pool: &PgPool, challenge_id: Uuid) -> Result
     })
 }
 
-pub async fn consume_stepup_challenge(pool: &PgPool, challenge_id: Uuid) -> Result<(), sqlx::Error> {
+pub async fn consume_stepup_challenge(
+    pool: &PgPool,
+    challenge_id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE auth_ext.stepup_challenges SET consumed_at = now() WHERE challenge_id = $1",
     )

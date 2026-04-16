@@ -13,6 +13,7 @@ pub async fn openapi_json(
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     crate::middleware::internal_auth::ensure_internal_access(&state, &headers)
+        .await
         .map_err(|_| ApiError::app(transfer_legacy_shared_types::AppError::Unauthorized))?;
 
     let spec = json!({
@@ -56,7 +57,7 @@ pub async fn docs_ui(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Html<&'static str>, StatusCode> {
-    crate::middleware::internal_auth::ensure_internal_access(&state, &headers)?;
+    crate::middleware::internal_auth::ensure_internal_access(&state, &headers).await?;
     Ok(Html(r#"<!doctype html>
 <html>
   <head><title>Transfer Legacy API Docs</title></head>

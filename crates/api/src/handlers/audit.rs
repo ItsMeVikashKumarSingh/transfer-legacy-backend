@@ -38,9 +38,10 @@ pub async fn audit_chain(
     headers: HeaderMap,
     Query(query): Query<AuditChainQuery>,
 ) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     let events = fetch_audit_chain(&state.db, query.policy_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
     let mut valid = true;
     let mut invalid_at = None;
@@ -59,7 +60,7 @@ pub async fn audit_chain(
             "prev_hash": event.prev_hash.as_ref().map(|h| URL_SAFE_NO_PAD.encode(h)),
         });
         let event_hash_bytes = canonicalize(&event_hash_payload)
-            .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &request_id))?;
+            .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
         let computed = sha256(&event_hash_bytes);
         if computed != event.event_hash {
             valid = false;
@@ -86,8 +87,9 @@ pub async fn audit_chain(
             invalid_at,
             events: response_events,
         },
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: rid,
     };
-    let aead = wrap_response(&state, &headers, &envelope)?;
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
 }

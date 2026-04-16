@@ -65,18 +65,25 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Claim</span>
-        <h1>A claim is now available</h1>
+        <h1>Claim available for "{{params.policy_name}}"</h1>
         <p>
-          You can begin the claim process in {{params.brand_name}}. Please
-          review the instructions and submit your claim when ready.
+          A trust claim for <strong>{{params.owner_name}}</strong>'s policy is now available for you to process in {{params.brand_name}}. 
+          Please review the instructions and submit your claim when ready.
         </p>
         <a class="cta" href="{{params.app_url}}/claims">
-          Start Claim
+          Start Claim Process
         </a>
       </div>
       <div class="footer">
-        You are receiving this notification because you are a beneficiary in
-        {{params.brand_name}}.
+        <p>
+          You are receiving this notification because you are a designated beneficiary in
+          {{params.owner_name}}'s plan.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          Secure your digital assets for the next generation. 
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> to learn more.
+        </p>
       </div>
     </div>
   </body>

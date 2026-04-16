@@ -65,18 +65,25 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Hold</span>
-        <h1>Release hold placed</h1>
+        <h1>Release on hold for "{{params.policy_name}}"</h1>
         <p>
-          A conflict hold has been placed on this {{params.brand_name}} policy
-          while we review the claim details.
+          A conflict hold has been placed on <strong>{{params.owner_name}}</strong>'s policy 
+          while the claim is being reviewed for potential discrepancies.
         </p>
         <a class="cta" href="{{params.app_url}}/inheritance">
-          View Policy
+          View Policy Status
         </a>
       </div>
       <div class="footer">
-        You are receiving this notification because you are associated with a
-        policy in {{params.brand_name}}.
+        <p>
+          You are receiving this notification because you are a participant in
+          {{params.owner_name}}'s plan.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          Our protocol ensures the highest integrity for digital asset inheritance. 
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> for our security whitepaper.
+        </p>
       </div>
     </div>
   </body>

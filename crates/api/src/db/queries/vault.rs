@@ -54,18 +54,25 @@ pub async fn list_items(pool: &PgPool, user_id: Uuid) -> Result<Vec<VaultItemRow
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| VaultItemRow {
-        item_id: r.0,
-        user_id: r.1,
-        ciphertext: r.2,
-        item_meta: r.3,
-        created_at: r.4,
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| VaultItemRow {
+            item_id: r.0,
+            user_id: r.1,
+            ciphertext: r.2,
+            item_meta: r.3,
+            created_at: r.4,
+        })
+        .collect())
 }
 
-pub async fn get_item(pool: &PgPool, user_id: Uuid, item_id: Uuid) -> Result<VaultItemRow, sqlx::Error> {
+pub async fn get_item(
+    pool: &PgPool,
+    user_id: Uuid,
+    item_id: Uuid,
+) -> Result<VaultItemRow, sqlx::Error> {
     let row = sqlx::query_as::<_, (Uuid, Uuid, Vec<u8>, Option<Value>, chrono::DateTime<chrono::Utc>)>(
-        "SELECT item_id, user_id, ciphertext, item_meta, created_at FROM vault.items WHERE user_id = $1 AND item_id = $2 AND is_deleted = false",
+        "SELECT item_id, user_id, ciphertext, item_meta, created_at FROM core.items WHERE user_id = $1 AND item_id = $2 AND is_deleted = false",
     )
     .bind(user_id)
     .bind(item_id)
@@ -83,7 +90,7 @@ pub async fn get_item(pool: &PgPool, user_id: Uuid, item_id: Uuid) -> Result<Vau
 
 pub async fn delete_item(pool: &PgPool, user_id: Uuid, item_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE vault.items SET is_deleted = true, deleted_at = now() WHERE user_id = $1 AND item_id = $2",
+        "UPDATE core.items SET is_deleted = true, deleted_at = now() WHERE user_id = $1 AND item_id = $2",
     )
     .bind(user_id)
     .bind(item_id)
@@ -128,15 +135,18 @@ pub async fn list_shares(pool: &PgPool, owner_id: Uuid) -> Result<Vec<VaultShare
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| VaultShareRow {
-        share_id: r.0,
-        item_id: r.1,
-        owner_id: r.2,
-        grantee_id: r.3,
-        envelope: r.4,
-        grant_sig: r.5,
-        created_at: r.6,
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| VaultShareRow {
+            share_id: r.0,
+            item_id: r.1,
+            owner_id: r.2,
+            grantee_id: r.3,
+            envelope: r.4,
+            grant_sig: r.5,
+            created_at: r.6,
+        })
+        .collect())
 }
 
 pub async fn list_shares_for_grantee_owner(
@@ -166,7 +176,11 @@ pub async fn list_shares_for_grantee_owner(
         .collect())
 }
 
-pub async fn revoke_share(pool: &PgPool, owner_id: Uuid, share_id: Uuid) -> Result<(), sqlx::Error> {
+pub async fn revoke_share(
+    pool: &PgPool,
+    owner_id: Uuid,
+    share_id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE vault.shares SET is_deleted = true, deleted_at = now() WHERE owner_id = $1 AND share_id = $2",
     )

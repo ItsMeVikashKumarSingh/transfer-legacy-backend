@@ -70,19 +70,25 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Urgent</span>
-        <h1>Heartbeat needed soon</h1>
+        <h1>URGENT: Heartbeat needed for "{{params.policy_name}}"</h1>
         <p>
-          Please submit your {{params.brand_name}} heartbeat as soon as possible
-          to keep your policy active.
+          Hello {{params.owner_name}}, this is an urgent reminder to submit your heartbeat 
+          for your policy <strong>"{{params.policy_name}}"</strong> as soon as possible. 
+          Failure to do so may trigger the inheritance release process.
         </p>
         <a class="cta" href="{{params.app_url}}/inheritance">
-          Submit Heartbeat
+          Verify My Status Now
         </a>
-        <p class="meta">Pending date: {{params.pending_at}}</p>
+        <p class="meta">Deadline: {{params.grace_deadline}}</p>
       </div>
       <div class="footer">
-        You are receiving this reminder because you own a policy in
-        {{params.brand_name}}.
+        <p>
+          You are receiving this reminder because you own a policy in {{params.brand_name}}.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> to manage your digital legacy.
+        </p>
       </div>
     </div>
   </body>

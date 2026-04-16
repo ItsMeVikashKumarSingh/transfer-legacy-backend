@@ -70,19 +70,25 @@
     <div class="wrapper">
       <div class="card">
         <span class="badge">Daily</span>
-        <h1>Heartbeat reminder</h1>
+        <h1>FINAL REMINDER: Heartbeat due for "{{params.policy_name}}"</h1>
         <p>
-          This is your daily reminder to submit a heartbeat to keep your
-          {{params.brand_name}} policy active.
+          Hello {{params.owner_name}}, this is your final daily reminder to submit your heartbeat 
+          for your policy <strong>"{{params.policy_name}}"</strong>. 
+          Your plan is now dangerously close to being released.
         </p>
         <a class="cta" href="{{params.app_url}}/inheritance">
-          Open {{params.brand_name}}
+          Verify My Status Now
         </a>
-        <p class="meta">Pending date: {{params.pending_at}}</p>
+        <p class="meta">Deadline: {{params.grace_deadline}}</p>
       </div>
       <div class="footer">
-        You are receiving this reminder because you own a policy in
-        {{params.brand_name}}.
+        <p>
+          You are receiving this reminder because you own a policy in {{params.brand_name}}.
+        </p>
+        <p>
+          <strong>About Transfer Legacy</strong><br>
+          Visit <a href="https://transferlegacy.com" style="color: #1f1d1b;">transferlegacy.com</a> to manage your digital legacy.
+        </p>
       </div>
     </div>
   </body>

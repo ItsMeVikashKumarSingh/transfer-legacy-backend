@@ -85,11 +85,9 @@ pub async fn mark_invite_used(
     tx: &mut Transaction<'_, Postgres>,
     invite_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE notify.invites SET used = true, used_at = now() WHERE invite_id = $1",
-    )
-    .bind(invite_id)
-    .execute(tx.as_mut())
-    .await?;
+    sqlx::query("UPDATE notify.invites SET used = true, used_at = now() WHERE invite_id = $1")
+        .bind(invite_id)
+        .execute(tx.as_mut())
+        .await?;
     Ok(())
 }

@@ -1,9 +1,12 @@
-pub mod user;
-pub mod person;
+pub mod attestation;
+pub mod claim;
 pub mod device;
 pub mod item;
-pub mod share;
+pub mod person;
 pub mod policy;
-pub mod claim;
-pub mod attestation;
 pub mod release_record;
+pub mod share;
+pub mod user;
+pub mod auth;
+pub mod vault;
+pub mod inheritance;

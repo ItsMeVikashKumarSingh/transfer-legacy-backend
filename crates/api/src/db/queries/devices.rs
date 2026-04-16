@@ -54,17 +54,24 @@ pub async fn list_devices(pool: &PgPool, user_id: Uuid) -> Result<Vec<DeviceRow>
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| DeviceRow {
-        device_id: r.0,
-        user_id: r.1,
-        ed25519_pubkey: r.2,
-        device_meta: r.3,
-        created_at: r.4,
-        last_seen_at: r.5,
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| DeviceRow {
+            device_id: r.0,
+            user_id: r.1,
+            ed25519_pubkey: r.2,
+            device_meta: r.3,
+            created_at: r.4,
+            last_seen_at: r.5,
+        })
+        .collect())
 }
 
-pub async fn revoke_device(pool: &PgPool, user_id: Uuid, device_id: Uuid) -> Result<(), sqlx::Error> {
+pub async fn revoke_device(
+    pool: &PgPool,
+    user_id: Uuid,
+    device_id: Uuid,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE auth_ext.devices SET is_deleted = true, deleted_at = now() WHERE user_id = $1 AND device_id = $2",
     )

@@ -1,6 +1,9 @@
-use chacha20poly1305::{aead::{Aead, KeyInit}, XChaCha20Poly1305, XNonce};
-use rand::RngCore;
 use crate::memory::SensitiveBytes;
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    XChaCha20Poly1305, XNonce,
+};
+use rand::RngCore;
 
 #[derive(thiserror::Error, Debug)]
 pub enum AeadError {
@@ -27,7 +30,13 @@ pub fn encrypt(key: &[u8], plaintext: &[u8], aad: &[u8]) -> Result<AeadEnvelope,
     rand::rngs::OsRng.fill_bytes(&mut nonce);
     let cipher = XChaCha20Poly1305::new_from_slice(key).map_err(|_| AeadError::InvalidKey)?;
     let ciphertext = cipher
-        .encrypt(XNonce::from_slice(&nonce), chacha20poly1305::aead::Payload { msg: plaintext, aad })
+        .encrypt(
+            XNonce::from_slice(&nonce),
+            chacha20poly1305::aead::Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
         .map_err(|_| AeadError::Encrypt)?;
 
     Ok(AeadEnvelope {
@@ -36,7 +45,12 @@ pub fn encrypt(key: &[u8], plaintext: &[u8], aad: &[u8]) -> Result<AeadEnvelope,
     })
 }
 
-pub fn decrypt(key: &[u8], nonce: &[u8], ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AeadError> {
+pub fn decrypt(
+    key: &[u8],
+    nonce: &[u8],
+    ciphertext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>, AeadError> {
     if key.len() != 32 {
         return Err(AeadError::InvalidKey);
     }
@@ -44,9 +58,16 @@ pub fn decrypt(key: &[u8], nonce: &[u8], ciphertext: &[u8], aad: &[u8]) -> Resul
         return Err(AeadError::InvalidNonce);
     }
     let key_protected = SensitiveBytes::new(key.to_vec());
-    let cipher = XChaCha20Poly1305::new_from_slice(key_protected.as_slice()).map_err(|_| AeadError::InvalidKey)?;
+    let cipher = XChaCha20Poly1305::new_from_slice(key_protected.as_slice())
+        .map_err(|_| AeadError::InvalidKey)?;
     let plaintext = cipher
-        .decrypt(XNonce::from_slice(nonce), chacha20poly1305::aead::Payload { msg: ciphertext, aad })
+        .decrypt(
+            XNonce::from_slice(nonce),
+            chacha20poly1305::aead::Payload {
+                msg: ciphertext,
+                aad,
+            },
+        )
         .map_err(|_| AeadError::Decrypt)?;
     Ok(plaintext)
 }

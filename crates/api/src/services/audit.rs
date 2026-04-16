@@ -39,7 +39,8 @@ pub async fn append_event(
         "payload_hash": URL_SAFE_NO_PAD.encode(&payload_hash),
         "prev_hash": prev_hash.as_ref().map(|h| URL_SAFE_NO_PAD.encode(h)),
     });
-    let event_hash_bytes = canonicalize(&event_hash_payload).map_err(|_| AuditError::Serialization)?;
+    let event_hash_bytes =
+        canonicalize(&event_hash_payload).map_err(|_| AuditError::Serialization)?;
     let event_hash = sha256(&event_hash_bytes);
 
     insert_audit_event(
@@ -68,6 +69,10 @@ pub fn ip_hash_from_headers(headers: &HeaderMap) -> Option<Vec<u8>> {
         .get("x-forwarded-for")
         .or_else(|| headers.get("x-real-ip"));
     let value = header.and_then(|v| v.to_str().ok())?;
-    let ip = value.split(',').next().map(|s| s.trim()).filter(|s| !s.is_empty())?;
+    let ip = value
+        .split(',')
+        .next()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())?;
     Some(sha256(ip.as_bytes()))
 }

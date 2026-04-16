@@ -35,16 +35,16 @@ struct ErrorEnvelope {
     error: ErrorBody,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, serde::Deserialize)]
 pub struct SuccessEnvelope<T> {
     pub data: T,
     pub request_id: String,
 }
 
-pub fn success<T: Serialize>(request_id: &RequestId, data: T) -> Json<SuccessEnvelope<T>> {
+pub fn success<T: Serialize>(request_id: &str, data: T) -> Json<SuccessEnvelope<T>> {
     Json(SuccessEnvelope {
         data,
-        request_id: crate::middleware::request_id::request_id_string(&request_id),
+        request_id: request_id.to_string(),
     })
 }
 
@@ -53,8 +53,8 @@ impl ApiError {
         ApiError::App(err)
     }
 
-    pub fn app_with_request_id(err: AppError, request_id: &RequestId) -> Self {
-        ApiError::AppWithRequestId(err, crate::middleware::request_id::request_id_string(&request_id))
+    pub fn app_with_request_id(err: AppError, request_id: &str) -> Self {
+        ApiError::AppWithRequestId(err, request_id.to_string())
     }
 }
 
@@ -63,7 +63,11 @@ impl IntoResponse for ApiError {
         let (status, app_error, request_id) = match self {
             ApiError::App(err) => (status_for(&err), err, "unknown".to_string()),
             ApiError::AppWithRequestId(err, request_id) => (status_for(&err), err, request_id),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, AppError::Internal, "unknown".to_string()),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                AppError::Internal,
+                "unknown".to_string(),
+            ),
         };
 
         let body = ErrorEnvelope {

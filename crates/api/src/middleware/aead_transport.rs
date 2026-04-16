@@ -7,6 +7,7 @@ use metrics::counter;
 use redis::AsyncCommands;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use crate::config::Config;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::errors::ApiError;
@@ -20,7 +21,7 @@ pub struct AeadEnvelope {
     pub ciphertext: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AeadResponse {
     pub nonce: String,
     pub ciphertext: String,
@@ -48,15 +49,20 @@ where
             .await
             .map_err(|_| ApiError::app(AppError::BadRequest))?;
 
-        let env: AeadEnvelope = serde_json::from_slice(&bytes)
-            .map_err(|_| ApiError::app(AppError::BadRequest))?;
+        let env: AeadEnvelope =
+            serde_json::from_slice(&bytes).map_err(|_| ApiError::app(AppError::BadRequest))?;
 
         let (seq, device_id, ts) = extract_replay_headers(&headers)?;
         enforce_replay(state, &device_id, seq, ts).await?;
 
-        let key = decode_key(&state.config.server_aead_key_b64)?;
-        let nonce = URL_SAFE_NO_PAD.decode(env.nonce).map_err(|_| ApiError::app(AppError::AeadIntegrity))?;
-        let ciphertext = URL_SAFE_NO_PAD.decode(env.ciphertext).map_err(|_| ApiError::app(AppError::AeadIntegrity))?;
+        let config = state.config().await;
+        let key = decode_key(&config.server_aead_key_b64)?;
+        let nonce = URL_SAFE_NO_PAD
+            .decode(env.nonce)
+            .map_err(|_| ApiError::app(AppError::AeadIntegrity))?;
+        let ciphertext = URL_SAFE_NO_PAD
+            .decode(env.ciphertext)
+            .map_err(|_| ApiError::app(AppError::AeadIntegrity))?;
         let aad = aad_from_headers(&headers);
 
         let plaintext = decrypt(&key, &nonce, &ciphertext, &aad)
@@ -68,8 +74,12 @@ where
     }
 }
 
-pub fn wrap_response<T: Serialize>(state: &AppState, headers: &HeaderMap, value: &T) -> Result<AeadResponse, ApiError> {
-    let key = decode_key(&state.config.server_aead_key_b64)?;
+pub fn wrap_response<T: Serialize>(
+    config: &Config,
+    headers: &HeaderMap,
+    value: &T,
+) -> Result<AeadResponse, ApiError> {
+    let key = decode_key(&config.server_aead_key_b64)?;
     let plaintext = serde_json::to_vec(value).map_err(|_| ApiError::app(AppError::Internal))?;
     let aad = aad_from_headers(headers);
     let CoreAeadEnvelope { nonce, ciphertext } =
@@ -123,18 +133,30 @@ fn extract_replay_headers(headers: &HeaderMap) -> Result<(u64, String, i64), Api
     Ok((seq, device_id, ts))
 }
 
-async fn enforce_replay(state: &AppState, device_id: &str, seq: u64, ts: i64) -> Result<(), ApiError> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| ApiError::app(AppError::ReplayOrSkew))?;
+async fn enforce_replay(
+    state: &AppState,
+    device_id: &str,
+    seq: u64,
+    ts: i64,
+) -> Result<(), ApiError> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ApiError::app(AppError::ReplayOrSkew))?;
     let now_ts = now.as_secs() as i64;
     if (now_ts - ts).abs() > 300 {
         counter!("aead_failures_total", "reason" => "clock_skew").increment(1);
         return Err(ApiError::app(AppError::ReplayOrSkew));
     }
 
-    let mut conn = state.redis.get_multiplexed_async_connection().await
+    let mut conn = state
+        .redis
+        .get_multiplexed_async_connection()
+        .await
         .map_err(|_| ApiError::app(AppError::Internal))?;
     let key = format!("seq:{}", device_id);
-    let last: Option<u64> = conn.get(&key).await
+    let last: Option<u64> = conn
+        .get(&key)
+        .await
         .map_err(|_| ApiError::app(AppError::Internal))?;
 
     if let Some(last_seq) = last {
@@ -145,7 +167,9 @@ async fn enforce_replay(state: &AppState, device_id: &str, seq: u64, ts: i64) ->
         }
     }
 
-    let _: () = conn.set_ex(key, seq, 86400).await
+    let _: () = conn
+        .set_ex(key, seq, 86400)
+        .await
         .map_err(|_| ApiError::app(AppError::Internal))?;
 
     Ok(())

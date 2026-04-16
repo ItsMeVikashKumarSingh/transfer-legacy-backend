@@ -23,6 +23,7 @@ pub struct ServerCapabilities {
 pub async fn capabilities(
     Extension(request_id): Extension<RequestId>,
 ) -> Json<crate::errors::SuccessEnvelope<ServerCapabilities>> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
     let capabilities = ServerCapabilities {
         crypto_versions: vec![CryptoVersion::V1.as_str()],
         current_crypto_version: CURRENT_CRYPTO_VERSION.as_str(),
@@ -36,5 +37,5 @@ pub async fn capabilities(
         canonicalization: "rfc8785",
     };
 
-    success(&request_id, capabilities)
+    success(&rid, capabilities)
 }

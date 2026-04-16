@@ -1,7 +1,8 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use ed25519_dalek::{Signer, SigningKey};
 use opaque_ke::{
-    ClientLogin, ClientLoginFinishParameters, ClientRegistration, ClientRegistrationFinishParameters,
+    ClientLogin, ClientLoginFinishParameters, ClientRegistration,
+    ClientRegistrationFinishParameters,
 };
 use rand::RngCore;
 use reqwest::Client;
@@ -122,9 +123,19 @@ fn encrypt_aead(key: &[u8], req_id: &str, seq: u64, ts: i64, plaintext: &[u8]) -
     }
 }
 
-fn decrypt_aead<T: for<'de> Deserialize<'de>>(key: &[u8], req_id: &str, seq: u64, ts: i64, env: &AeadEnvelope) -> T {
-    let nonce = URL_SAFE_NO_PAD.decode(env.nonce.as_bytes()).expect("nonce b64");
-    let ciphertext = URL_SAFE_NO_PAD.decode(env.ciphertext.as_bytes()).expect("cipher b64");
+fn decrypt_aead<T: for<'de> Deserialize<'de>>(
+    key: &[u8],
+    req_id: &str,
+    seq: u64,
+    ts: i64,
+    env: &AeadEnvelope,
+) -> T {
+    let nonce = URL_SAFE_NO_PAD
+        .decode(env.nonce.as_bytes())
+        .expect("nonce b64");
+    let ciphertext = URL_SAFE_NO_PAD
+        .decode(env.ciphertext.as_bytes())
+        .expect("cipher b64");
     let pt = aead::decrypt(key, &nonce, &ciphertext, &aad(req_id, seq, ts)).expect("decrypt");
     serde_json::from_slice(&pt).expect("json decode")
 }
@@ -148,10 +159,16 @@ fn env_from_dotenv_local() -> HashMap<String, String> {
 #[tokio::main]
 async fn main() {
     let env = env_from_dotenv_local();
-    let base_url = std::env::var("TL_BASE_URL").ok().unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
-    let server_aead_key_b64 = std::env::var("SERVER_AEAD_KEY").ok().or_else(|| env.get("SERVER_AEAD_KEY").cloned())
+    let base_url = std::env::var("TL_BASE_URL")
+        .ok()
+        .unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
+    let server_aead_key_b64 = std::env::var("SERVER_AEAD_KEY")
+        .ok()
+        .or_else(|| env.get("SERVER_AEAD_KEY").cloned())
         .expect("SERVER_AEAD_KEY must be set (base64url-no-pad)");
-    let server_aead_key = URL_SAFE_NO_PAD.decode(server_aead_key_b64.trim()).expect("SERVER_AEAD_KEY base64url");
+    let server_aead_key = URL_SAFE_NO_PAD
+        .decode(server_aead_key_b64.trim())
+        .expect("SERVER_AEAD_KEY base64url");
 
     let http = Client::new();
 
@@ -176,7 +193,8 @@ async fn main() {
         .send()
         .await
         .expect("register/init http");
-    let reg_init_body: SuccessEnvelope<RegisterInitResponse> = reg_init.json().await.expect("register/init json");
+    let reg_init_body: SuccessEnvelope<RegisterInitResponse> =
+        reg_init.json().await.expect("register/init json");
 
     let reg_resp_bytes = URL_SAFE_NO_PAD
         .decode(reg_init_body.data.registration_response.as_bytes())
@@ -230,7 +248,13 @@ async fn main() {
     let reg_req_id = Uuid::new_v4().to_string();
     let reg_dev_id = Uuid::new_v4().to_string();
     let reg_finish_pt = serde_json::to_vec(&reg_finish_inner).expect("register/finish json");
-    let reg_finish_env = encrypt_aead(&server_aead_key, &reg_req_id, reg_seq, reg_ts, &reg_finish_pt);
+    let reg_finish_env = encrypt_aead(
+        &server_aead_key,
+        &reg_req_id,
+        reg_seq,
+        reg_ts,
+        &reg_finish_pt,
+    );
 
     let reg_finish = http
         .put(format!("{base_url}/v1/auth/register/finish"))
@@ -245,22 +269,32 @@ async fn main() {
         .expect("register/finish http");
 
     let reg_finish_env: AeadEnvelope = reg_finish.json().await.expect("register/finish json");
-    let reg_finish_envelope: SuccessEnvelope<RegisterFinishResponse> =
-        decrypt_aead(&server_aead_key, &reg_req_id, reg_seq, reg_ts, &reg_finish_env);
+    let reg_finish_envelope: SuccessEnvelope<RegisterFinishResponse> = decrypt_aead(
+        &server_aead_key,
+        &reg_req_id,
+        reg_seq,
+        reg_ts,
+        &reg_finish_env,
+    );
     assert_eq!(reg_finish_envelope.data.user_id, user_id);
 
     // 3) OPAQUE login
-    let login_start = ClientLogin::<DefaultSuite>::start(&mut rng, password.as_bytes()).expect("opaque login start");
+    let login_start = ClientLogin::<DefaultSuite>::start(&mut rng, password.as_bytes())
+        .expect("opaque login start");
     let cred_req_b64 = URL_SAFE_NO_PAD.encode(login_start.message.serialize());
 
     let login_init = http
         .post(format!("{base_url}/v1/auth/login/init"))
         .header("x-idempotency-key", format!("idem-{}", Uuid::new_v4()))
-        .json(&LoginInitRequest { user_id, credential_request: &cred_req_b64 })
+        .json(&LoginInitRequest {
+            user_id,
+            credential_request: &cred_req_b64,
+        })
         .send()
         .await
         .expect("login/init http");
-    let login_init_body: SuccessEnvelope<LoginInitResponse> = login_init.json().await.expect("login/init json");
+    let login_init_body: SuccessEnvelope<LoginInitResponse> =
+        login_init.json().await.expect("login/init json");
 
     let cred_resp_bytes = URL_SAFE_NO_PAD
         .decode(login_init_body.data.credential_response.as_bytes())
@@ -288,7 +322,13 @@ async fn main() {
         credential_finalization: &cred_fin_b64,
     };
     let login_finish_pt = serde_json::to_vec(&login_finish_inner).expect("login/finish json");
-    let login_finish_env = encrypt_aead(&server_aead_key, &login_req_id, login_seq, login_ts, &login_finish_pt);
+    let login_finish_env = encrypt_aead(
+        &server_aead_key,
+        &login_req_id,
+        login_seq,
+        login_ts,
+        &login_finish_pt,
+    );
 
     let login_finish = http
         .post(format!("{base_url}/v1/auth/login/finish"))
@@ -303,8 +343,13 @@ async fn main() {
         .expect("login/finish http");
 
     let login_finish_env: AeadEnvelope = login_finish.json().await.expect("login/finish json");
-    let login_finish_envelope: SuccessEnvelope<LoginFinishResponse> =
-        decrypt_aead(&server_aead_key, &login_req_id, login_seq, login_ts, &login_finish_env);
+    let login_finish_envelope: SuccessEnvelope<LoginFinishResponse> = decrypt_aead(
+        &server_aead_key,
+        &login_req_id,
+        login_seq,
+        login_ts,
+        &login_finish_env,
+    );
     assert_eq!(login_finish_envelope.data.user_id, user_id);
 
     // 4) Device register + list (DB-backed)
@@ -332,7 +377,13 @@ async fn main() {
     let dev_ts = now_ts();
     let dev_req_id = Uuid::new_v4().to_string();
     let dev_finish_pt = serde_json::to_vec(&dev_inner).expect("device/register json");
-    let dev_env = encrypt_aead(&server_aead_key, &dev_req_id, dev_seq, dev_ts, &dev_finish_pt);
+    let dev_env = encrypt_aead(
+        &server_aead_key,
+        &dev_req_id,
+        dev_seq,
+        dev_ts,
+        &dev_finish_pt,
+    );
     let _ = http
         .post(format!("{base_url}/v1/devices/register"))
         .header("x-idempotency-key", format!("idem-{}", Uuid::new_v4()))

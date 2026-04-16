@@ -12,7 +12,10 @@ fn no_server_decrypt_calls_in_api_or_worker() {
             if path.extension().and_then(|e| e.to_str()) != Some("rs") {
                 continue;
             }
-            if path.components().any(|component| component.as_os_str() == "tests") {
+            if path
+                .components()
+                .any(|component| component.as_os_str() == "tests")
+            {
                 continue;
             }
             if path.ends_with("aead_transport.rs") {
