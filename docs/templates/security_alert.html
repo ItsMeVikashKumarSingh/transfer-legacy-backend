@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Security Alert</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
+        .header { border-bottom: 2px solid #ff4b2b; padding-bottom: 10px; margin-bottom: 20px; }
+        .alert { background: #fff5f5; border-left: 4px solid #ff4b2b; padding: 15px; margin: 20px 0; }
+        .diff { background: #f8f9fa; padding: 10px; font-family: monospace; font-size: 14px; border-radius: 4px; overflow-x: auto; }
+        .footer { margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="color: #ff4b2b; margin: 0;">Security Alert</h1>
+            <p style="margin: 5px 0 0 0;">{{brand_name}} Platform Notice</p>
+        </div>
+        
+        <p>Hello,</p>
+        <p>This is an automated security notification from <strong>{{brand_name}}</strong>. A sensitive configuration change has been detected and applied.</p>
+
+        <div class="alert">
+            <strong>Change Summary:</strong><br/>
+            {{{diff_html}}}
+        </div>
+
+        <div class="audit">
+            <strong>Audit Details:</strong><br/>
+            {{{audit_details}}}
+        </div>
+
+        <p>If you did not authorize this change, please contact technical security immediately.</p>
+
+        <div class="footer">
+            <p>&copy; 2026 {{brand_name}}. All rights reserved.<br/>
+            {{platform_description}}</p>
+            <p><a href="{{app_url}}">{{app_url}}</a></p>
+        </div>
+    </div>
+</body>
+</html>

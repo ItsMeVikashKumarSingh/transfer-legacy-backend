@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{success, ApiError};
 use crate::state::AppState;
 use crate::middleware::rate_limit::require_idempotency;
-use crate::notifications::brevo::NotificationTemplate;
+use crate::notifications::resend::NotificationTemplate;
 use transfer_legacy_crypto_core::aead::decrypt;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use uuid::Uuid;
@@ -65,7 +65,7 @@ pub async fn password_reset_request(
             .await
             .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
 
-        // 4. Send via Brevo
+        // 4. Send via Resend
         let template = NotificationTemplate::PasswordReset {
             owner_name,
             reset_url: recovery_link,

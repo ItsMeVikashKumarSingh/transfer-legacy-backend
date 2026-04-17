@@ -24,6 +24,7 @@ pub struct TestContext {
     pub client: Arc<TestServer>,
     pub db: PgPool,
     pub config: Config,
+    pub state: AppState,
 }
 
 pub async fn spawn_app() -> TestContext {
@@ -37,8 +38,10 @@ pub async fn spawn_app() -> TestContext {
 
     let pool = PgPool::connect(&config.database_url).await.expect("Failed to connect to test DB");
     
-    // Automatically run migrations for fresh test environments
-    sqlx::migrate!("../../migrations").run(&pool).await.expect("Failed to run migrations");
+    // Automatically run migrations for fresh test environments, skip if requested
+    if std::env::var("SKIP_MIGRATIONS").is_err() {
+        sqlx::migrate!("../../migrations").run(&pool).await.expect("Failed to run migrations");
+    }
 
     let state = AppState {
         config: Arc::new(RwLock::new(config.clone())),
@@ -47,13 +50,14 @@ pub async fn spawn_app() -> TestContext {
         opaque_setup: transfer_legacy_crypto_core::opaque::server_setup_from_b64(&config.opaque_server_setup_b64).expect("Mock OPAQUE fail"),
     };
 
-    let app = crate::router::create_router(&config, state);
+    let app = crate::router::create_router(&config, state.clone());
     let client = Arc::new(TestServer::new(app).expect("Failed to create TestServer"));
 
     TestContext {
         client,
         db: pool,
         config,
+        state,
     }
 }
 

@@ -51,10 +51,10 @@ impl AppState {
         &self,
         _user_id: uuid::Uuid,
         to_email: &str,
-        template: crate::notifications::brevo::NotificationTemplate,
+        template: crate::notifications::resend::NotificationTemplate,
     ) -> anyhow::Result<()> {
         let config = self.config().await;
-        crate::notifications::brevo::send_notification(&config, to_email, template).await
+        crate::notifications::resend::send_notification(&config, to_email, template).await
             .map_err(|e| anyhow::anyhow!(e))
     }
 }
