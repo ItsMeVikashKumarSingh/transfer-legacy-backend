@@ -1,10 +1,10 @@
 use axum::extract::{Extension, State};
-use axum::{Json, http::HeaderMap};
+use axum::{http::HeaderMap, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{success, ApiError};
-use crate::state::AppState;
 use crate::middleware::rate_limit::require_idempotency;
+use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct RefreshRequest {
@@ -27,17 +27,25 @@ pub async fn refresh(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
-    
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
+
     let res = crate::services::supabase::refresh_session(&config, &payload.refresh_token)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Unauthorized,
+                &rid,
+            )
+        })?;
 
-    Ok(success(&rid, RefreshResponse {
-        access_token: res.access_token,
-        refresh_token: res.refresh_token,
-        expires_in: res.expires_in,
-    }))
+    Ok(success(
+        &rid,
+        RefreshResponse {
+            access_token: res.access_token,
+            refresh_token: res.refresh_token,
+            expires_in: res.expires_in,
+        },
+    ))
 }

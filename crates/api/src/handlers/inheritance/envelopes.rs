@@ -9,7 +9,7 @@ use crate::db::queries::claims::fetch_claim_for_update_tx;
 use crate::db::queries::inheritance::fetch_policy_for_update_tx;
 use crate::db::queries::vault::list_shares_for_grantee_owner;
 use crate::errors::ApiError;
-use crate::middleware::aead_transport::{AeadResponse, wrap_response};
+use crate::middleware::aead_transport::{wrap_response, AeadResponse};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -40,29 +40,47 @@ pub async fn list_envelopes(
     Query(query): Query<EnvelopesQuery>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let claim = fetch_claim_for_update_tx(&mut tx, query.claim_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
     if claim.claimant_person_id != query.claimant_person_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
 
     let policy = fetch_policy_for_update_tx(&mut tx, claim.policy_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
     if policy.status != "released" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    let shares = list_shares_for_grantee_owner(&state.db, policy.owner_id, query.claimant_person_id)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let shares =
+        list_shares_for_grantee_owner(&state.db, policy.owner_id, query.claimant_person_id)
+            .await
+            .map_err(|_| {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     let items = shares
         .into_iter()
@@ -75,7 +93,11 @@ pub async fn list_envelopes(
         .collect();
 
     let envelope = crate::errors::SuccessEnvelope {
-        data: EnvelopesResponse { policy_id: policy.policy_id, claim_id: query.claim_id, items },
+        data: EnvelopesResponse {
+            policy_id: policy.policy_id,
+            claim_id: query.claim_id,
+            items,
+        },
         request_id: rid,
     };
     let config = state.config().await;

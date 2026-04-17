@@ -1,17 +1,17 @@
 use axum::extract::{Extension, State};
-use axum::{Json, http::HeaderMap};
+use axum::{http::HeaderMap, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::db::queries::auth::fetch_opaque_record;
+use crate::db::queries::vault::{
+    delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share,
+};
 use crate::errors::ApiError;
-use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
+use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::state::AppState;
-use crate::db::queries::vault::{
-    insert_item, list_items, get_item, delete_item, insert_share, list_shares, revoke_share,
-};
-use crate::db::queries::auth::fetch_opaque_record;
 use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize, signatures::verify_ed25519};
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
 
@@ -137,16 +137,20 @@ pub async fn create_item(
     AeadJson(payload): AeadJson<CreateItemRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     if payload.crypto_version != CURRENT_CRYPTO_VERSION.as_str() {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::CryptoVersionUnsupported, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::CryptoVersionUnsupported,
+            &rid,
+        ));
     }
 
-    let ciphertext = URL_SAFE_NO_PAD.decode(payload.ciphertext)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let ciphertext = URL_SAFE_NO_PAD.decode(payload.ciphertext).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
     let item_id = insert_item(
         &state.db,
@@ -157,7 +161,9 @@ pub async fn create_item(
         CURRENT_SCHEMA_VERSION,
     )
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: CreateItemResponse { item_id },
@@ -175,9 +181,9 @@ pub async fn list_items_handler(
     AeadJson(payload): AeadJson<ListItemsRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    let items = list_items(&state.db, payload.user_id)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let items = list_items(&state.db, payload.user_id).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let list = items
         .into_iter()
@@ -207,7 +213,9 @@ pub async fn get_item_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let item = get_item(&state.db, payload.user_id, payload.item_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: GetItemResponse {
@@ -230,13 +238,15 @@ pub async fn delete_item_handler(
     AeadJson(payload): AeadJson<DeleteItemRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     delete_item(&state.db, payload.user_id, payload.item_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: DeleteItemResponse { status: "ok" },
@@ -254,12 +264,15 @@ pub async fn create_share(
     AeadJson(payload): AeadJson<CreateShareRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     if payload.crypto_version != CURRENT_CRYPTO_VERSION.as_str() {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::CryptoVersionUnsupported, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::CryptoVersionUnsupported,
+            &rid,
+        ));
     }
 
     let envelope_obj = payload.envelope.as_object().ok_or_else(|| {
@@ -268,23 +281,36 @@ pub async fn create_share(
     let version = envelope_obj
         .get("crypto_version")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+        .ok_or_else(|| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+        })?;
     if version != CURRENT_CRYPTO_VERSION.as_str() {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::CryptoVersionUnsupported, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::CryptoVersionUnsupported,
+            &rid,
+        ));
     }
 
-    let canonical = canonicalize(&payload.envelope)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let canonical = canonicalize(&payload.envelope).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
     let digest = sha256(&canonical);
 
-    let grant_sig = URL_SAFE_NO_PAD.decode(payload.grant_sig)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let grant_sig = URL_SAFE_NO_PAD.decode(payload.grant_sig).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
     let owner_record = fetch_opaque_record(&state.db, payload.owner_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
-    verify_ed25519(&owner_record.ed25519_pubkey, &digest, &grant_sig)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::SignatureInvalid, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
+    verify_ed25519(&owner_record.ed25519_pubkey, &digest, &grant_sig).map_err(|_| {
+        ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::SignatureInvalid,
+            &rid,
+        )
+    })?;
 
     let share_id = insert_share(
         &state.db,
@@ -297,7 +323,9 @@ pub async fn create_share(
         CURRENT_SCHEMA_VERSION,
     )
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: CreateShareResponse { share_id },
@@ -317,12 +345,15 @@ pub async fn list_shares_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let shares = list_shares(&state.db, payload.owner_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let mut list = Vec::with_capacity(shares.len());
     for share in shares {
-        let envelope_val = serde_json::from_slice(&share.envelope)
-            .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        let envelope_val = serde_json::from_slice(&share.envelope).map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
         list.push(ShareSummary {
             share_id: share.share_id,
             item_id: share.item_id,
@@ -349,13 +380,15 @@ pub async fn revoke_share_handler(
     AeadJson(payload): AeadJson<RevokeShareRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     revoke_share(&state.db, payload.owner_id, payload.share_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: RevokeShareResponse { status: "ok" },
@@ -373,12 +406,15 @@ pub async fn migrate_crypto(
     AeadJson(payload): AeadJson<MigrateRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     if payload.to_version != CURRENT_CRYPTO_VERSION.as_str() {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::CryptoVersionUnsupported, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::CryptoVersionUnsupported,
+            &rid,
+        ));
     }
 
     let envelope = crate::errors::SuccessEnvelope {

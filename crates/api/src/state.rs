@@ -54,7 +54,8 @@ impl AppState {
         template: crate::notifications::resend::NotificationTemplate,
     ) -> anyhow::Result<()> {
         let config = self.config().await;
-        crate::notifications::resend::send_notification(&config, to_email, template).await
+        crate::notifications::resend::send_notification(&config, to_email, template)
+            .await
             .map_err(|e| anyhow::anyhow!(e))
     }
 }

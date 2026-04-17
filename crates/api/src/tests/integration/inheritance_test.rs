@@ -1,10 +1,10 @@
 use crate::tests::test_utils::{spawn_app, CryptoClient};
 use transfer_legacy_shared_types::models::auth::{
-    LoginFinishRequest, LoginFinishResponse, LoginInitRequest, LoginInitResponse, 
+    LoginFinishRequest, LoginFinishResponse, LoginInitRequest, LoginInitResponse,
     RegisterFinishRequest, RegisterFinishResponse, RegisterInitRequest, RegisterInitResponse,
 };
 use transfer_legacy_shared_types::models::inheritance::{
-    PolicyUpsertRequest, PolicyUpsertResponse, HeartbeatRequest, HeartbeatResponse
+    HeartbeatRequest, HeartbeatResponse, PolicyUpsertRequest, PolicyUpsertResponse,
 };
 use uuid::Uuid;
 
@@ -16,10 +16,15 @@ async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, password: &str
         registration_request: reg_req,
         credential_identifier: None,
     };
-    let reg_init_res: RegisterInitResponse = client.post_aead("/v1/auth/register/init", &reg_init_req).await;
-    
+    let reg_init_res: RegisterInitResponse = client
+        .post_aead("/v1/auth/register/init", &reg_init_req)
+        .await;
+
     // 2. Registration Finish
-    let reg_upload = crate::tests::test_utils::test_client_register_finish(reg_state, &reg_init_res.registration_response);
+    let reg_upload = crate::tests::test_utils::test_client_register_finish(
+        reg_state,
+        &reg_init_res.registration_response,
+    );
     let reg_finish_req = RegisterFinishRequest {
         session_id: reg_init_res.session_id,
         registration_upload: reg_upload,
@@ -31,7 +36,9 @@ async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, password: &str
         enc_legal_name: "test-enc".to_string(),
         enc_email: "test-enc".to_string(),
     };
-    let _: RegisterFinishResponse = client.post_aead("/v1/auth/register/finish", &reg_finish_req).await;
+    let _: RegisterFinishResponse = client
+        .post_aead("/v1/auth/register/finish", &reg_finish_req)
+        .await;
 
     // 3. Login Init
     let (login_state, login_req) = crate::tests::test_utils::test_client_login_init(password);
@@ -39,18 +46,22 @@ async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, password: &str
         user_id,
         credential_request: login_req,
     };
-    let login_init_res: LoginInitResponse = client.post_aead("/v1/auth/login/init", &login_init_req).await;
+    let login_init_res: LoginInitResponse = client
+        .post_aead("/v1/auth/login/init", &login_init_req)
+        .await;
 
     // 4. Login Finish
     let credential_finalization = crate::tests::test_utils::test_client_login_finish(
-        login_state, 
-        &login_init_res.credential_response
+        login_state,
+        &login_init_res.credential_response,
     );
     let login_finish_req = LoginFinishRequest {
         session_id: login_init_res.session_id,
         credential_finalization,
     };
-    let login_finish_res: LoginFinishResponse = client.post_aead("/v1/auth/login/finish", &login_finish_req).await;
+    let login_finish_res: LoginFinishResponse = client
+        .post_aead("/v1/auth/login/finish", &login_finish_req)
+        .await;
 
     client.set_token(login_finish_res.session_token.clone());
     login_finish_res.session_token
@@ -60,14 +71,17 @@ async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, password: &str
 async fn test_inheritance_lifecycle() {
     let ctx = spawn_app().await;
     let mut client = CryptoClient::new(&ctx);
-    
+
     let user_id = Uuid::new_v4();
     let password = "PolicyPassword123!";
     let _token = get_auth_token(&mut client, user_id, password).await;
-    
+
     // We would normally need a stepup_challenge_id for a real test.
     // For this verification, we'll focus on compilation and core flow.
     // In a full production test, we'd use a DB helper to insert a valid challenge.
 
-    println!("Inheritance test updated to use shared models for {}", user_id);
+    println!(
+        "Inheritance test updated to use shared models for {}",
+        user_id
+    );
 }

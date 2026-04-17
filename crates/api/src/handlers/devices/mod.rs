@@ -1,14 +1,14 @@
 use axum::extract::{Extension, Path, State};
-use axum::{Json, http::HeaderMap};
+use axum::{http::HeaderMap, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::db::queries::devices::{count_devices, insert_device, list_devices, revoke_device};
 use crate::errors::{success, ApiError};
-use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
+use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::state::AppState;
-use crate::db::queries::devices::{count_devices, insert_device, list_devices, revoke_device};
 use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize, signatures::verify_ed25519};
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
 
@@ -63,32 +63,47 @@ pub async fn register(
     AeadJson(payload): AeadJson<DeviceRegisterRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     let count = count_devices(&state.db, payload.user_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
     if count >= 10 {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Conflict,
+            &rid,
+        ));
     }
 
-    let ed25519_pubkey = URL_SAFE_NO_PAD.decode(payload.ed25519_pubkey)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
-    let sig = URL_SAFE_NO_PAD.decode(payload.device_sig)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let ed25519_pubkey = URL_SAFE_NO_PAD
+        .decode(payload.ed25519_pubkey)
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+        })?;
+    let sig = URL_SAFE_NO_PAD.decode(payload.device_sig).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
     let canonical = canonicalize(&serde_json::json!({
         "device_id": payload.device_id,
         "user_id": payload.user_id,
         "ts": payload.ts,
     }))
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
     let digest = sha256(&canonical);
 
-    verify_ed25519(&ed25519_pubkey, &digest, &sig)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::SignatureInvalid, &rid))?;
+    verify_ed25519(&ed25519_pubkey, &digest, &sig).map_err(|_| {
+        ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::SignatureInvalid,
+            &rid,
+        )
+    })?;
 
     insert_device(
         &state.db,
@@ -100,10 +115,14 @@ pub async fn register(
         CURRENT_SCHEMA_VERSION,
     )
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
-        data: DeviceRegisterResponse { device_id: payload.device_id },
+        data: DeviceRegisterResponse {
+            device_id: payload.device_id,
+        },
         request_id: rid,
     };
     let config = state.config().await;
@@ -119,7 +138,9 @@ pub async fn list(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let devices = list_devices(&state.db, payload.user_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let items = devices
         .into_iter()
@@ -143,12 +164,14 @@ pub async fn revoke(
     AeadJson(payload): AeadJson<DeviceRevokeRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
     revoke_device(&state.db, payload.user_id, device_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: DeviceRevokeResponse { status: "ok" },

@@ -195,7 +195,8 @@ impl Config {
             app_url,
             brand_name: env::var("BRAND_NAME").unwrap_or_else(|_| "Transfer Legacy".into()),
             internal_api_token: env::var("INTERNAL_API_TOKEN").ok(),
-            database_url: env::var("DATABASE_URL").map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?,
+            database_url: env::var("DATABASE_URL")
+                .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?,
             redis_url: env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?,
             openbao_addr: env::var("OPENBAO_ADDR").unwrap_or_default(),
             openbao_token: "".to_string(),
@@ -206,14 +207,24 @@ impl Config {
             b2_audit_bucket_name: env::var("B2_AUDIT_BUCKET_NAME").unwrap_or_default(),
             b2_backup_bucket_name: env::var("B2_BACKUP_BUCKET_NAME").unwrap_or_default(),
             b2_endpoint_url: env::var("B2_ENDPOINT_URL").unwrap_or_default(),
-            server_aead_key_b64: env::var("SERVER_AEAD_KEY_B64").or_else(|_| env::var("SERVER_AEAD_KEY")).map_err(|_| ConfigError::MissingVar("SERVER_AEAD_KEY_B64"))?,
-            opaque_server_setup_b64: env::var("OPAQUE_SERVER_SETUP_B64").or_else(|_| env::var("OPAQUE_SERVER_SETUP")).map_err(|_| ConfigError::MissingVar("OPAQUE_SERVER_SETUP_B64"))?,
-            jwt_secret: env::var("JWT_SECRET").map_err(|_| ConfigError::MissingVar("JWT_SECRET"))?,
-            supabase_url: env::var("SUPABASE_URL").map_err(|_| ConfigError::MissingVar("SUPABASE_URL"))?,
-            supabase_publishable_key: env::var("SUPABASE_PUBLISHABLE_KEY").map_err(|_| ConfigError::MissingVar("SUPABASE_PUBLISHABLE_KEY"))?,
-            supabase_secret_key: env::var("SUPABASE_SECRET_KEY").map_err(|_| ConfigError::MissingVar("SUPABASE_SECRET_KEY"))?,
-            server_hmac_secret: env::var("SERVER_HMAC_SECRET").map_err(|_| ConfigError::MissingVar("SERVER_HMAC_SECRET"))?,
-            resend_api_key: env::var("RESEND_API_KEY").map_err(|_| ConfigError::MissingVar("RESEND_API_KEY"))?,
+            server_aead_key_b64: env::var("SERVER_AEAD_KEY_B64")
+                .or_else(|_| env::var("SERVER_AEAD_KEY"))
+                .map_err(|_| ConfigError::MissingVar("SERVER_AEAD_KEY_B64"))?,
+            opaque_server_setup_b64: env::var("OPAQUE_SERVER_SETUP_B64")
+                .or_else(|_| env::var("OPAQUE_SERVER_SETUP"))
+                .map_err(|_| ConfigError::MissingVar("OPAQUE_SERVER_SETUP_B64"))?,
+            jwt_secret: env::var("JWT_SECRET")
+                .map_err(|_| ConfigError::MissingVar("JWT_SECRET"))?,
+            supabase_url: env::var("SUPABASE_URL")
+                .map_err(|_| ConfigError::MissingVar("SUPABASE_URL"))?,
+            supabase_publishable_key: env::var("SUPABASE_PUBLISHABLE_KEY")
+                .map_err(|_| ConfigError::MissingVar("SUPABASE_PUBLISHABLE_KEY"))?,
+            supabase_secret_key: env::var("SUPABASE_SECRET_KEY")
+                .map_err(|_| ConfigError::MissingVar("SUPABASE_SECRET_KEY"))?,
+            server_hmac_secret: env::var("SERVER_HMAC_SECRET")
+                .map_err(|_| ConfigError::MissingVar("SERVER_HMAC_SECRET"))?,
+            resend_api_key: env::var("RESEND_API_KEY")
+                .map_err(|_| ConfigError::MissingVar("RESEND_API_KEY"))?,
             owner_email: env::var("OWNER_EMAIL").unwrap_or_default(),
         })
     }
@@ -249,14 +260,26 @@ impl Config {
             };
         }
 
-        check_sensitive!("SERVER_AEAD_KEY", &self.server_aead_key_b64, &new.server_aead_key_b64);
-        check_sensitive!("OPAQUE_SERVER_SETUP", &self.opaque_server_setup_b64, &new.opaque_server_setup_b64);
+        check_sensitive!(
+            "SERVER_AEAD_KEY",
+            &self.server_aead_key_b64,
+            &new.server_aead_key_b64
+        );
+        check_sensitive!(
+            "OPAQUE_SERVER_SETUP",
+            &self.opaque_server_setup_b64,
+            &new.opaque_server_setup_b64
+        );
         check_sensitive!("JWT_SECRET", &self.jwt_secret, &new.jwt_secret);
-        check_sensitive!("SERVER_HMAC_SECRET", &self.server_hmac_secret, &new.server_hmac_secret);
+        check_sensitive!(
+            "SERVER_HMAC_SECRET",
+            &self.server_hmac_secret,
+            &new.server_hmac_secret
+        );
 
         check_plain!("APP_URL", &self.app_url, &new.app_url);
         check_plain!("BRAND_NAME", &self.brand_name, &new.brand_name);
-        
+
         let old_db = mask_url(&self.database_url);
         let new_db = mask_url(&new.database_url);
         if old_db != new_db {

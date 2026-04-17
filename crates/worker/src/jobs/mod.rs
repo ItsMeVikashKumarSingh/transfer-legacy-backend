@@ -6,13 +6,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::services::{audit, b2, resend, notify_log, openbao};
+use crate::services::{audit, b2, notify_log, openbao, resend};
 use crate::state::AppState;
-use transfer_legacy_crypto_core::{
-    aead::decrypt,
-    hash::sha256,
-    jcs::canonicalize,
-};
+use transfer_legacy_crypto_core::{aead::decrypt, hash::sha256, jcs::canonicalize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatEvalJob {
@@ -121,8 +117,9 @@ pub async fn run_heartbeat_eval(
         let policy_name = row.5;
         let enc_owner_name = row.6;
 
-        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
-            .unwrap_or_else(|_| "Policy Owner".to_string());
+        let owner_name =
+            decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+                .unwrap_or_else(|_| "Policy Owner".to_string());
 
         let lag = (now - pending_at).num_seconds().max(0) as f64;
         histogram!("heartbeat_worker_lag_seconds").record(lag);
@@ -180,8 +177,9 @@ pub async fn run_heartbeat_eval(
         let policy_name = row.4;
         let enc_owner_name = row.5;
 
-        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
-            .unwrap_or_else(|_| "Policy Owner".to_string());
+        let owner_name =
+            decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+                .unwrap_or_else(|_| "Policy Owner".to_string());
 
         let payload = serde_json::json!({
             "policy_id": policy_id,
@@ -487,8 +485,9 @@ pub async fn run_release_delivery(
         let policy_name = row.3;
         let enc_owner_name = row.4;
 
-        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
-            .unwrap_or_else(|_| "Policy Owner".to_string());
+        let owner_name =
+            decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+                .unwrap_or_else(|_| "Policy Owner".to_string());
 
         let mut tx = state.db.begin().await.map_err(|_| JobError::Database)?;
         let updated = sqlx::query(
@@ -561,8 +560,9 @@ async fn enqueue_owner_reminders(
         let policy_name = row.4;
         let enc_owner_name = row.5;
 
-        let owner_name = decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
-            .unwrap_or_else(|_| "Policy Owner".to_string());
+        let owner_name =
+            decrypt_owner_name(&state.config.server_aead_key_b64, &enc_owner_name, owner_id)
+                .unwrap_or_else(|_| "Policy Owner".to_string());
 
         let cadence_days = cadence_days(&cadence_str);
         let early_offset = Duration::days((cadence_days as f64 * 0.2).ceil() as i64);

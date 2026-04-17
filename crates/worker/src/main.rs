@@ -18,7 +18,9 @@ async fn main() -> Result<(), std::io::Error> {
     lock_memory_pages();
     tracing::info!("worker starting");
 
-    let config = Config::load().await.map_err(|e| std::io::Error::other(format!("config error: {}", e)))?;
+    let config = Config::load()
+        .await
+        .map_err(|e| std::io::Error::other(format!("config error: {}", e)))?;
     let db = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url)

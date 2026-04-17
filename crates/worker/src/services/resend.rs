@@ -1,8 +1,8 @@
+use crate::config::Config;
+use handlebars::Handlebars;
 use reqwest::Client;
 use serde::Serialize;
-use handlebars::Handlebars;
 use std::collections::HashMap;
-use crate::config::Config;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResendError {
@@ -29,30 +29,59 @@ pub async fn send_email(
     params: serde_json::Value,
 ) -> Result<(), ResendError> {
     let hb = Handlebars::new();
-    
+
     // Load template from local docs/templates
     let template_path = format!("docs/templates/{}.html", template_name);
-    
-    let html_content = std::fs::read_to_string(&template_path)
-        .map_err(|e| ResendError::Template(format!("Failed to read template {}: {}", template_name, e)))?;
+
+    let html_content = std::fs::read_to_string(&template_path).map_err(|e| {
+        ResendError::Template(format!("Failed to read template {}: {}", template_name, e))
+    })?;
 
     // Determine Subject and From address based on template name
     let (subject, from) = match template_name {
-        n if n.contains("invite") => ("You've been invited to a Digital Inheritance Plan", "Transfer Legacy <support@transferlegacy.com>"),
-        n if n.contains("password_reset") => ("Reset your Transfer Legacy Password", "Transfer Legacy <no-reply@transferlegacy.com>"),
-        n if n.contains("owner_reminder_early") => ("Action Required: Digital Inheritance Heartbeat", "Transfer Legacy <no-reply@transferlegacy.com>"),
-        n if n.contains("owner_reminder_urgent") => ("URGENT: Your Digital Inheritance Plan is Pending", "Transfer Legacy <no-reply@transferlegacy.com>"),
-        n if n.contains("owner_reminder_daily") => ("Daily Reminder: Digital Inheritance Heartbeat", "Transfer Legacy <no-reply@transferlegacy.com>"),
-        n if n.contains("beneficiary_claim") => ("A Digital Inheritance Claim is Available", "Transfer Legacy <support@transferlegacy.com>"),
-        n if n.contains("approver_attestation") => ("Action Required: Witness Attestation Request", "Transfer Legacy <support@transferlegacy.com>"),
-        n if n.contains("release_ready") => ("Action Required: Your Legacy is Ready for Release", "Transfer Legacy <support@transferlegacy.com>"),
-        _ => ("Notification from Transfer Legacy", "Transfer Legacy <no-reply@transferlegacy.com>"),
+        n if n.contains("invite") => (
+            "You've been invited to a Digital Inheritance Plan",
+            "Transfer Legacy <support@transferlegacy.com>",
+        ),
+        n if n.contains("password_reset") => (
+            "Reset your Transfer Legacy Password",
+            "Transfer Legacy <no-reply@transferlegacy.com>",
+        ),
+        n if n.contains("owner_reminder_early") => (
+            "Action Required: Digital Inheritance Heartbeat",
+            "Transfer Legacy <no-reply@transferlegacy.com>",
+        ),
+        n if n.contains("owner_reminder_urgent") => (
+            "URGENT: Your Digital Inheritance Plan is Pending",
+            "Transfer Legacy <no-reply@transferlegacy.com>",
+        ),
+        n if n.contains("owner_reminder_daily") => (
+            "Daily Reminder: Digital Inheritance Heartbeat",
+            "Transfer Legacy <no-reply@transferlegacy.com>",
+        ),
+        n if n.contains("beneficiary_claim") => (
+            "A Digital Inheritance Claim is Available",
+            "Transfer Legacy <support@transferlegacy.com>",
+        ),
+        n if n.contains("approver_attestation") => (
+            "Action Required: Witness Attestation Request",
+            "Transfer Legacy <support@transferlegacy.com>",
+        ),
+        n if n.contains("release_ready") => (
+            "Action Required: Your Legacy is Ready for Release",
+            "Transfer Legacy <support@transferlegacy.com>",
+        ),
+        _ => (
+            "Notification from Transfer Legacy",
+            "Transfer Legacy <no-reply@transferlegacy.com>",
+        ),
     };
 
     let params_map: HashMap<String, serde_json::Value> = serde_json::from_value(params)
         .map_err(|e| ResendError::Template(format!("Invalid params: {}", e)))?;
 
-    let rendered_html = hb.render_template(&html_content, &params_map)
+    let rendered_html = hb
+        .render_template(&html_content, &params_map)
         .map_err(|e| ResendError::Template(format!("Failed to render template: {}", e)))?;
 
     let client = Client::new();

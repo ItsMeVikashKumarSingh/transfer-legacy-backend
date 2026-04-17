@@ -2,7 +2,10 @@ use axum::http::{HeaderMap, StatusCode};
 
 use crate::state::AppState;
 
-pub async fn ensure_internal_access(state: &AppState, headers: &HeaderMap) -> Result<(), StatusCode> {
+pub async fn ensure_internal_access(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(), StatusCode> {
     let config = state.config().await;
     match &config.internal_api_token {
         Some(expected) => {

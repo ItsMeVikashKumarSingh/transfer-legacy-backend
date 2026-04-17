@@ -9,13 +9,13 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use crate::db::queries::claims::{
-    confirm_attachment_tx, fetch_attachment_policy_tx, fetch_claim_for_update_tx, fetch_claim_policy,
-    fetch_policy_approvers, insert_attestation_tx, insert_attachment_tx, insert_claim_tx,
-    insert_release_record_tx, update_claim_status_tx,
+    confirm_attachment_tx, fetch_attachment_policy_tx, fetch_claim_for_update_tx,
+    fetch_claim_policy, fetch_policy_approvers, insert_attachment_tx, insert_attestation_tx,
+    insert_claim_tx, insert_release_record_tx, update_claim_status_tx,
 };
 use crate::db::queries::inheritance::fetch_policy_for_update_tx;
 use crate::errors::ApiError;
-use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
+use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::services::{audit, b2, openbao};
 use crate::state::AppState;
@@ -65,23 +65,32 @@ pub async fn initiate_claim(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     if payload.claim_type != "type_a" && payload.claim_type != "type_b" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::BadRequest,
+            &rid,
+        ));
     }
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let policy = fetch_policy_for_update_tx(&mut tx, payload.policy_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
 
     if policy.status != "investigating" && policy.status != "release_ready" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
 
     let (status, confirmation_deadline) = if payload.claim_type == "type_a" {
@@ -99,7 +108,9 @@ pub async fn initiate_claim(
         confirmation_deadline,
     )
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     if status == "confirmed" {
         sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
@@ -118,15 +129,28 @@ pub async fn initiate_claim(
         "confirmation_deadline": confirmation_deadline,
     });
     let ip_hash = audit::ip_hash_from_headers(&headers);
-    audit::append_event(&mut tx, payload.policy_id, "claim_initiated", &audit_payload, Some(policy.owner_id), ip_hash)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    audit::append_event(
+        &mut tx,
+        payload.policy_id,
+        "claim_initiated",
+        &audit_payload,
+        Some(policy.owner_id),
+        ip_hash,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
-        data: ClaimInitiateResponse { claim_id, confirmation_deadline },
+        data: ClaimInitiateResponse {
+            claim_id,
+            confirmation_deadline,
+        },
         request_id: rid,
     };
     let aead = wrap_response(&config, &headers, &envelope)?;
@@ -154,38 +178,55 @@ pub async fn confirm_claim(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let claim = fetch_claim_for_update_tx(&mut tx, payload.claim_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
 
     if claim.claimant_person_id != payload.claimant_person_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
 
     if claim.claim_type != "type_a" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::BadRequest,
+            &rid,
+        ));
     }
 
     if claim.status != "pending_confirmation" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Conflict,
+            &rid,
+        ));
     }
 
     if let Some(deadline) = claim.confirmation_deadline {
         if deadline < Utc::now() {
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+            return Err(ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Unauthorized,
+                &rid,
+            ));
         }
     }
 
     update_claim_status_tx(&mut tx, payload.claim_id, "confirmed", Some(Utc::now()))
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     sqlx::query("UPDATE inheritance.policies SET status = 'release_ready', conflict_hold_until = now() + interval '48 hours', updated_at = now() WHERE policy_id = $1 AND status = 'investigating'")
         .bind(claim.policy_id)
@@ -199,12 +240,22 @@ pub async fn confirm_claim(
         "status": "confirmed",
     });
     let ip_hash = audit::ip_hash_from_headers(&headers);
-    audit::append_event(&mut tx, claim.policy_id, "claim_confirmed", &audit_payload, None, ip_hash)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    audit::append_event(
+        &mut tx,
+        claim.policy_id,
+        "claim_confirmed",
+        &audit_payload,
+        None,
+        ip_hash,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ClaimConfirmResponse { status: "ok" },
@@ -237,28 +288,38 @@ pub async fn presign_attachment(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let attachment_id = Uuid::new_v4();
     let object_key = format!("claims/{}/{}", payload.claim_id, attachment_id);
     insert_attachment_tx(&mut tx, attachment_id, payload.claim_id, &object_key)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let upload_url = b2::presign_put(&config, &object_key, &payload.content_type, 900)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let envelope = crate::errors::SuccessEnvelope {
-        data: PresignAttachmentResponse { attachment_id, upload_url, object_key },
+        data: PresignAttachmentResponse {
+            attachment_id,
+            upload_url,
+            object_key,
+        },
         request_id: rid,
     };
     let aead = wrap_response(&config, &headers, &envelope)?;
@@ -288,24 +349,35 @@ pub async fn confirm_attachment(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
-    let hash = URL_SAFE_NO_PAD
-        .decode(payload.sha256_b64)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let hash = URL_SAFE_NO_PAD.decode(payload.sha256_b64).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let (claim_id, policy_id) = fetch_attachment_policy_tx(&mut tx, payload.attachment_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
 
-    confirm_attachment_tx(&mut tx, payload.attachment_id, hash, payload.size_bytes, &payload.mime_type)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    confirm_attachment_tx(
+        &mut tx,
+        payload.attachment_id,
+        hash,
+        payload.size_bytes,
+        &payload.mime_type,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let audit_payload = serde_json::json!({
         "attachment_id": payload.attachment_id,
@@ -313,12 +385,22 @@ pub async fn confirm_attachment(
         "policy_id": policy_id,
     });
     let ip_hash = audit::ip_hash_from_headers(&headers);
-    audit::append_event(&mut tx, policy_id, "claim_attachment_confirmed", &audit_payload, None, ip_hash)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    audit::append_event(
+        &mut tx,
+        policy_id,
+        "claim_attachment_confirmed",
+        &audit_payload,
+        None,
+        ip_hash,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ConfirmAttachmentResponse { status: "ok" },
@@ -353,53 +435,77 @@ pub async fn submit_attestation(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
     if payload.signature_type != "ed25519" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::BadRequest,
+            &rid,
+        ));
     }
 
     let approvers = fetch_policy_approvers(&state.db, payload.policy_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
 
     let claim_policy_id = fetch_claim_policy(&state.db, payload.claim_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
     if claim_policy_id != payload.policy_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
 
-    let allowed = approvers.as_array().map(|arr| {
-        arr.iter().any(|v| {
-            v.get("person_id")
-                .and_then(|p| p.as_str())
-                .map(|s| s == payload.approver_person_id.to_string())
-                .unwrap_or(false)
+    let allowed = approvers
+        .as_array()
+        .map(|arr| {
+            arr.iter().any(|v| {
+                v.get("person_id")
+                    .and_then(|p| p.as_str())
+                    .map(|s| s == payload.approver_person_id.to_string())
+                    .unwrap_or(false)
+            })
         })
-    }).unwrap_or(false);
+        .unwrap_or(false);
 
     if !allowed {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
 
-    let statement_bytes = canonicalize(&payload.statement)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let statement_bytes = canonicalize(&payload.statement).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
     let digest = sha256(&statement_bytes);
-    let signature = URL_SAFE_NO_PAD
-        .decode(payload.signature_b64)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let signature = URL_SAFE_NO_PAD.decode(payload.signature_b64).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
     let public_key = URL_SAFE_NO_PAD
         .decode(payload.public_key_b64)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+        })?;
 
-    verify_ed25519(&public_key, &digest, &signature)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::SignatureInvalid, &rid))?;
+    verify_ed25519(&public_key, &digest, &signature).map_err(|_| {
+        ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::SignatureInvalid,
+            &rid,
+        )
+    })?;
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let attestation_id = insert_attestation_tx(
         &mut tx,
@@ -411,7 +517,9 @@ pub async fn submit_attestation(
         &payload.signature_type,
     )
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let audit_payload = serde_json::json!({
         "attestation_id": attestation_id,
@@ -420,12 +528,22 @@ pub async fn submit_attestation(
         "approver_person_id": payload.approver_person_id,
     });
     let ip_hash = audit::ip_hash_from_headers(&headers);
-    audit::append_event(&mut tx, payload.policy_id, "attestation_submitted", &audit_payload, None, ip_hash)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    audit::append_event(
+        &mut tx,
+        payload.policy_id,
+        "attestation_submitted",
+        &audit_payload,
+        None,
+        ip_hash,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: AttestationResponse { attestation_id },
@@ -459,19 +577,23 @@ pub async fn create_release_record(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
-    let payload_bytes = canonicalize(&payload.payload)
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let payload_bytes = canonicalize(&payload.payload).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
     let payload_hash = sha256(&payload_bytes);
     let signature = openbao::sign_digest(&config, "tl-signing", &payload_hash)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let release_id = insert_release_record_tx(
         &mut tx,
@@ -483,7 +605,9 @@ pub async fn create_release_record(
         &payload.crypto_version,
     )
     .await
-    .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let audit_payload = serde_json::json!({
         "release_id": release_id,
@@ -491,15 +615,28 @@ pub async fn create_release_record(
         "claim_id": payload.claim_id,
     });
     let ip_hash = audit::ip_hash_from_headers(&headers);
-    audit::append_event(&mut tx, payload.policy_id, "release_record_created", &audit_payload, None, ip_hash)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    audit::append_event(
+        &mut tx,
+        payload.policy_id,
+        "release_record_created",
+        &audit_payload,
+        None,
+        ip_hash,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
-        data: ReleaseRecordResponse { release_id, signature },
+        data: ReleaseRecordResponse {
+            release_id,
+            signature,
+        },
         request_id: rid,
     };
     let aead = wrap_response(&config, &headers, &envelope)?;

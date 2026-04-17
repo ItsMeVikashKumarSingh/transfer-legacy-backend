@@ -1,9 +1,9 @@
+use crate::config::Config;
+use handlebars::Handlebars;
 use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
-use handlebars::Handlebars;
 use std::collections::HashMap;
-use crate::config::Config;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResendError {
@@ -97,11 +97,11 @@ impl NotificationTemplate {
 
     fn from_address(&self) -> &str {
         match self {
-            Self::Invite { .. } |
-            Self::ClaimAvailable { .. } |
-            Self::AttestationRequest { .. } |
-            Self::ConflictHold { .. } |
-            Self::ReleaseReady { .. } => "Transfer Legacy <support@transferlegacy.com>",
+            Self::Invite { .. }
+            | Self::ClaimAvailable { .. }
+            | Self::AttestationRequest { .. }
+            | Self::ConflictHold { .. }
+            | Self::ReleaseReady { .. } => "Transfer Legacy <support@transferlegacy.com>",
             _ => "Transfer Legacy <no-reply@transferlegacy.com>",
         }
     }
@@ -113,14 +113,14 @@ pub async fn send_notification(
     template: NotificationTemplate,
 ) -> Result<(), ResendError> {
     let mut hb = Handlebars::new();
-    
+
     // Load template from local docs/templates or parent directory (for workspace tests)
     let template_name = template.template_name();
     let paths = vec![
         format!("docs/templates/{}.html", template_name),
         format!("../../docs/templates/{}.html", template_name),
     ];
-    
+
     let mut html_content = None;
     for path in &paths {
         if let Ok(content) = std::fs::read_to_string(path) {
@@ -140,48 +140,81 @@ pub async fn send_notification(
     let mut params = HashMap::new();
     params.insert("brand_name", config.brand_name.clone());
     params.insert("app_url", config.app_url.clone());
-    params.insert("platform_description", "Transfer Legacy provides secure, non-custodial digital inheritance solutions.".to_string());
+    params.insert(
+        "platform_description",
+        "Transfer Legacy provides secure, non-custodial digital inheritance solutions.".to_string(),
+    );
 
     // Map template-specific params
     match &template {
-        NotificationTemplate::Invite { owner_name, policy_name, invite_url, expires_at, .. } => {
+        NotificationTemplate::Invite {
+            owner_name,
+            policy_name,
+            invite_url,
+            expires_at,
+            ..
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("policy_name", policy_name.clone());
             params.insert("invite_url", invite_url.clone());
             params.insert("expires_at", expires_at.clone());
         }
-        NotificationTemplate::PasswordReset { owner_name, reset_url } => {
+        NotificationTemplate::PasswordReset {
+            owner_name,
+            reset_url,
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("reset_url", reset_url.clone());
         }
-        NotificationTemplate::OwnerReminder { owner_name, policy_name, grace_deadline, .. } => {
+        NotificationTemplate::OwnerReminder {
+            owner_name,
+            policy_name,
+            grace_deadline,
+            ..
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("policy_name", policy_name.clone());
             params.insert("grace_deadline", grace_deadline.clone());
         }
-        NotificationTemplate::ClaimAvailable { owner_name, policy_name } => {
+        NotificationTemplate::ClaimAvailable {
+            owner_name,
+            policy_name,
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("policy_name", policy_name.clone());
         }
-        NotificationTemplate::AttestationRequest { owner_name, policy_name } => {
+        NotificationTemplate::AttestationRequest {
+            owner_name,
+            policy_name,
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("policy_name", policy_name.clone());
         }
-        NotificationTemplate::ConflictHold { owner_name, policy_name } => {
+        NotificationTemplate::ConflictHold {
+            owner_name,
+            policy_name,
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("policy_name", policy_name.clone());
         }
-        NotificationTemplate::ReleaseReady { owner_name, policy_name } => {
+        NotificationTemplate::ReleaseReady {
+            owner_name,
+            policy_name,
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("policy_name", policy_name.clone());
         }
-        NotificationTemplate::SecurityAlert { diff_html, audit_details } => {
+        NotificationTemplate::SecurityAlert {
+            diff_html,
+            audit_details,
+        } => {
             params.insert("diff_html", diff_html.clone());
             params.insert("audit_details", audit_details.clone());
         }
     }
 
-    let rendered_html = hb.render_template(&html_content, &params)
+    let rendered_html = hb
+        .render_template(&html_content, &params)
         .map_err(|e| ResendError::Template(format!("Failed to render template: {}", e)))?;
 
     let client = Client::new();

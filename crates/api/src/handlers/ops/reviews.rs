@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::db::queries::ops::{fetch_manual_review, list_manual_reviews};
 use crate::errors::ApiError;
-use crate::middleware::aead_transport::{AeadResponse, wrap_response};
+use crate::middleware::aead_transport::{wrap_response, AeadResponse};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -44,7 +44,9 @@ pub async fn list_reviews(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let rows = list_manual_reviews(&state.db, query.status.as_deref())
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     let data: Vec<ReviewSummary> = rows
         .into_iter()
@@ -76,7 +78,9 @@ pub async fn get_review(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let row = fetch_manual_review(&state.db, review_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: ReviewDetail {

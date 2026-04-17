@@ -58,12 +58,14 @@ pub async fn docs_ui(
     headers: HeaderMap,
 ) -> Result<Html<&'static str>, StatusCode> {
     crate::middleware::internal_auth::ensure_internal_access(&state, &headers).await?;
-    Ok(Html(r#"<!doctype html>
+    Ok(Html(
+        r#"<!doctype html>
 <html>
   <head><title>Transfer Legacy API Docs</title></head>
   <body>
     <h1>Transfer Legacy API Docs</h1>
     <p>Fetch the OpenAPI spec at <code>/v1/openapi.json</code>.</p>
   </body>
-</html>"#))
+</html>"#,
+    ))
 }

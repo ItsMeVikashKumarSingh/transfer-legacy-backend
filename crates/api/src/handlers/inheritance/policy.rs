@@ -1,16 +1,18 @@
 use axum::extract::{Extension, State};
-use axum::{Json, http::HeaderMap};
+use axum::{http::HeaderMap, Json};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::db::queries::inheritance::{
+    fetch_policy_for_update_tx, insert_policy_tx, update_policy_tx,
+};
+use crate::db::queries::stepup::{consume_stepup_challenge_tx, fetch_stepup_challenge_tx};
 use crate::errors::ApiError;
-use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
+use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::state::AppState;
-use crate::db::queries::inheritance::{fetch_policy_for_update_tx, insert_policy_tx, update_policy_tx};
-use crate::db::queries::stepup::{fetch_stepup_challenge_tx, consume_stepup_challenge_tx};
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
 
 #[derive(Debug, Deserialize)]
@@ -41,44 +43,72 @@ pub async fn upsert_policy(
     AeadJson(payload): AeadJson<PolicyUpsertRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
 
-    validate_m_of_n(&payload.policy_type, payload.m_of_n.as_ref())
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    validate_m_of_n(&payload.policy_type, payload.m_of_n.as_ref()).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
-    let mut tx = state.db.begin().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let challenge = fetch_stepup_challenge_tx(&mut tx, payload.stepup_challenge_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Unauthorized,
+                &rid,
+            )
+        })?;
     if challenge.consumed_at.is_some()
         || challenge.expires_at < Utc::now()
         || challenge.user_id != payload.owner_id
         || challenge.action != "policy_upsert"
     {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Unauthorized,
+            &rid,
+        ));
     }
     consume_stepup_challenge_tx(&mut tx, payload.stepup_challenge_id)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
-    let cadence_days = cadence_to_days(&payload.cadence)
-        .ok_or_else(|| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+    let cadence_days = cadence_to_days(&payload.cadence).ok_or_else(|| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
-    let (policy_id, event_type, pending_at, grace_deadline) = if let Some(policy_id) = payload.policy_id {
+    let (policy_id, event_type, pending_at, grace_deadline) = if let Some(policy_id) =
+        payload.policy_id
+    {
         let existing = fetch_policy_for_update_tx(&mut tx, policy_id)
             .await
-            .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid))?;
+            .map_err(|_| {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::NotFound,
+                    &rid,
+                )
+            })?;
         if existing.owner_id != payload.owner_id {
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+            return Err(ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Forbidden,
+                &rid,
+            ));
         }
         let base_time = existing.last_heartbeat_at.unwrap_or_else(Utc::now);
         let pending_at = base_time + Duration::days(cadence_days);
-        let grace_deadline = grace_deadline_from_cadence(&payload.cadence, pending_at)
-            .ok_or_else(|| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+        let grace_deadline =
+            grace_deadline_from_cadence(&payload.cadence, pending_at).ok_or_else(|| {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::BadRequest,
+                    &rid,
+                )
+            })?;
         let update_result = update_policy_tx(
             &mut tx,
             policy_id,
@@ -96,16 +126,27 @@ pub async fn upsert_policy(
         .await;
         if let Err(err) = update_result {
             if matches!(err, sqlx::Error::RowNotFound) {
-                return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid));
+                return Err(ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::NotFound,
+                    &rid,
+                ));
             }
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid));
+            return Err(ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Internal,
+                &rid,
+            ));
         }
         (policy_id, "policy_updated", pending_at, grace_deadline)
     } else {
         let now = Utc::now();
         let pending_at = now + Duration::days(cadence_days);
-        let grace_deadline = grace_deadline_from_cadence(&payload.cadence, pending_at)
-            .ok_or_else(|| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid))?;
+        let grace_deadline =
+            grace_deadline_from_cadence(&payload.cadence, pending_at).ok_or_else(|| {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::BadRequest,
+                    &rid,
+                )
+            })?;
         let policy_id = insert_policy_tx(
             &mut tx,
             payload.owner_id,
@@ -124,7 +165,9 @@ pub async fn upsert_policy(
             payload.label.as_deref(),
         )
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
         (policy_id, "policy_created", pending_at, grace_deadline)
     };
 
@@ -142,15 +185,29 @@ pub async fn upsert_policy(
     });
 
     let ip_hash = ip_hash_from_headers(&headers);
-    append_event(&mut tx, policy_id, event_type, &policy_payload, Some(payload.owner_id), ip_hash)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    append_event(
+        &mut tx,
+        policy_id,
+        event_type,
+        &policy_payload,
+        Some(payload.owner_id),
+        ip_hash,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
-    tx.commit().await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid))?;
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = crate::errors::SuccessEnvelope {
-        data: PolicyUpsertResponse { policy_id, pending_at, grace_deadline },
+        data: PolicyUpsertResponse {
+            policy_id,
+            pending_at,
+            grace_deadline,
+        },
         request_id: rid,
     };
     let config = state.config().await;
@@ -180,7 +237,10 @@ fn cadence_to_days(cadence: &str) -> Option<i64> {
     }
 }
 
-fn grace_deadline_from_cadence(cadence: &str, pending_at: chrono::DateTime<chrono::Utc>) -> Option<chrono::DateTime<chrono::Utc>> {
+fn grace_deadline_from_cadence(
+    cadence: &str,
+    pending_at: chrono::DateTime<chrono::Utc>,
+) -> Option<chrono::DateTime<chrono::Utc>> {
     match cadence {
         "1w" => Some(pending_at + Duration::days(28)),
         "15d" => Some(pending_at + Duration::days(45)),

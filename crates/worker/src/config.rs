@@ -1,6 +1,6 @@
-use std::env;
-use serde::Deserialize;
 use reqwest::Client;
+use serde::Deserialize;
+use std::env;
 
 #[derive(Debug, Clone)]
 pub struct Config {

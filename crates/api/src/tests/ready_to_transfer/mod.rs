@@ -9,19 +9,27 @@ mod tests {
     use opaque_ke::{ClientRegistration, RegistrationResponse};
     use rand::rngs::OsRng;
     use sqlx::PgPool;
-    use transfer_legacy_crypto_core::opaque::{server_setup_from_b64, create_server_setup, server_setup_to_b64, DefaultSuite};
+    use transfer_legacy_crypto_core::opaque::{
+        create_server_setup, server_setup_from_b64, server_setup_to_b64, DefaultSuite,
+    };
     use uuid::Uuid;
 
     #[tokio::test]
     async fn verify_full_lifecycle_success() {
         // 1. Initial Setup: Load real environment
         dotenvy::from_filename(".env.local").ok();
-        
+
         // Ensure mandatory config vars have at least dummy values for the e2e test if missing
-        if std::env::var("OPENBAO_ADDR").is_err() { std::env::set_var("OPENBAO_ADDR", "http://127.0.0.1:8200"); }
-        if std::env::var("ROLE_ID").is_err() { std::env::set_var("ROLE_ID", "test-role-id"); }
-        if std::env::var("SECRET_ID").is_err() { std::env::set_var("SECRET_ID", "test-secret-id"); }
-        
+        if std::env::var("OPENBAO_ADDR").is_err() {
+            std::env::set_var("OPENBAO_ADDR", "http://127.0.0.1:8200");
+        }
+        if std::env::var("ROLE_ID").is_err() {
+            std::env::set_var("ROLE_ID", "test-role-id");
+        }
+        if std::env::var("SECRET_ID").is_err() {
+            std::env::set_var("SECRET_ID", "test-secret-id");
+        }
+
         let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         let pool = PgPool::connect(&db_url)
             .await
@@ -155,9 +163,11 @@ mod tests {
 
         // 8. Real Resend Notification Verification
         println!("✉️ Testing REAL Resend Notification delivery...");
-        
+
         let mut origins = Vec::new();
-        origins.push(axum::http::HeaderValue::from_static("http://localhost:3000"));
+        origins.push(axum::http::HeaderValue::from_static(
+            "http://localhost:3000",
+        ));
 
         let config = Config {
             bind_addr: "127.0.0.1".to_string(),
@@ -184,10 +194,11 @@ mod tests {
             supabase_publishable_key: "test".to_string(),
             supabase_secret_key: "test".to_string(),
             server_hmac_secret: "test-hmac".to_string(),
-            resend_api_key: std::env::var("RESEND_API_KEY").unwrap_or_else(|_| "test-key".to_string()),
+            resend_api_key: std::env::var("RESEND_API_KEY")
+                .unwrap_or_else(|_| "test-key".to_string()),
             owner_email: "vikashbro111@gmail.com".to_string(),
         };
-        
+
         let test_email = "vikashbro111@gmail.com";
         let res = send_notification(
             &config,

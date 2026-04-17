@@ -1,15 +1,15 @@
-pub mod health;
-pub mod capabilities;
-pub mod auth;
-pub mod devices;
-pub mod vault;
-pub mod inheritance;
-pub mod claims;
 pub mod audit;
+pub mod auth;
+pub mod capabilities;
+pub mod claims;
+pub mod devices;
 pub mod gdpr;
-pub mod ops;
-pub mod openapi;
+pub mod health;
+pub mod inheritance;
 pub mod metrics;
+pub mod openapi;
+pub mod ops;
+pub mod vault;
 
-pub use health::health;
 pub use capabilities::capabilities;
+pub use health::health;

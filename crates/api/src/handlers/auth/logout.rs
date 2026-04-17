@@ -1,10 +1,10 @@
 use axum::extract::{Extension, State};
-use axum::{Json, http::HeaderMap};
+use axum::{http::HeaderMap, Json};
 use serde::Serialize;
 
 use crate::errors::{success, ApiError};
-use crate::state::AppState;
 use crate::middleware::rate_limit::require_idempotency;
+use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
@@ -19,10 +19,10 @@ pub async fn logout(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     let config = state.config().await;
 
-    require_idempotency(&state, &headers)
-        .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid))?;
-    
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
+
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())

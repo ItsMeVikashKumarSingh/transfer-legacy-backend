@@ -1,3 +1,4 @@
+use crate::config::Config;
 use async_trait::async_trait;
 use axum::body::Body;
 use axum::extract::{FromRequest, Request};
@@ -7,7 +8,6 @@ use metrics::counter;
 use redis::AsyncCommands;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::config::Config;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::errors::ApiError;
