@@ -28,7 +28,7 @@ pub async fn send_email(
     to_email: &str,
     params: serde_json::Value,
 ) -> Result<(), ResendError> {
-    let mut hb = Handlebars::new();
+    let hb = Handlebars::new();
     
     // Load template from local docs/templates
     let template_path = format!("docs/templates/{}.html", template_name);

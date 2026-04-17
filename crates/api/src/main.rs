@@ -61,10 +61,10 @@ async fn main() -> Result<(), ApiError> {
                     tracing::info!("✅ Configuration reloaded successfully.");
 
                     // Send Security Notification
-                    if let Err(e) = crate::notifications::brevo::send_notification(
+                    if let Err(e) = crate::notifications::resend::send_notification(
                         &new_config,
                         &new_config.owner_email,
-                        crate::notifications::brevo::NotificationTemplate::SecurityAlert {
+                        crate::notifications::resend::NotificationTemplate::SecurityAlert {
                             diff_html,
                             audit_details,
                         },

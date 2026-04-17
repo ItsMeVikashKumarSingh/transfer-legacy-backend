@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::services::{audit, b2, brevo, notify_log, openbao};
+use crate::services::{audit, b2, resend, notify_log, openbao};
 use crate::state::AppState;
 use transfer_legacy_crypto_core::{
-    aead::{decrypt, Key},
+    aead::decrypt,
     hash::sha256,
     jcs::canonicalize,
 };
@@ -44,7 +44,7 @@ pub struct ReleaseDeliveryJob {
 pub struct NotifyJob {
     pub policy_id: Option<Uuid>,
     pub email: String,
-    pub template_id: String,
+    pub template_name: String,
     pub params: serde_json::Value,
     pub dedupe_key: String,
     pub attempts: u32,
@@ -152,7 +152,7 @@ pub async fn run_heartbeat_eval(
                 NotifyJob {
                     policy_id: Some(policy_id),
                     email,
-                    template_id: state.config.brevo_owner_reminder_daily_template_id.clone(),
+                    template_name: "owner_reminder_daily".into(),
                     params,
                     dedupe_key,
                     attempts: 0,
@@ -205,7 +205,7 @@ pub async fn run_heartbeat_eval(
                 NotifyJob {
                     policy_id: Some(policy_id),
                     email,
-                    template_id: state.config.brevo_beneficiary_claim_template_id.clone(),
+                    template_name: "beneficiary_claim_available".into(),
                     params,
                     dedupe_key,
                     attempts: 0,
@@ -228,7 +228,7 @@ pub async fn run_heartbeat_eval(
                 NotifyJob {
                     policy_id: Some(policy_id),
                     email,
-                    template_id: state.config.brevo_approver_attestation_template_id.clone(),
+                    template_name: "approver_attestation_request".into(),
                     params,
                     dedupe_key,
                     attempts: 0,
@@ -247,7 +247,7 @@ pub async fn run_notify(job: NotifyJob, state: Data<AppState>) -> Result<(), Job
         &state.db,
         job.policy_id,
         &job.email,
-        &job.template_id,
+        &job.template_name,
         &job.dedupe_key,
     )
     .await
@@ -258,7 +258,7 @@ pub async fn run_notify(job: NotifyJob, state: Data<AppState>) -> Result<(), Job
     }
 
     let result =
-        brevo::send_template_email(&state.config, &job.template_id, &job.email, job.params).await;
+        resend::send_email(&state.config, &job.template_name, &job.email, job.params).await;
 
     match result {
         Ok(_) => notify_log::mark_sent(&state.db, &job.dedupe_key)
@@ -525,7 +525,7 @@ pub async fn run_release_delivery(
                 NotifyJob {
                     policy_id: Some(policy_id),
                     email,
-                    template_id: state.config.brevo_release_ready_template_id.clone(),
+                    template_name: "release_ready".into(),
                     params,
                     dedupe_key,
                     attempts: 0,
@@ -575,8 +575,8 @@ async fn enqueue_owner_reminders(
                 state,
                 policy_id,
                 owner_id,
-                &state.config.brevo_owner_reminder_early_template_id,
-                "owner-early",
+                "owner_reminder_early",
+                "owner_early",
                 now,
                 pending_at,
                 &owner_name,
@@ -591,8 +591,8 @@ async fn enqueue_owner_reminders(
                 state,
                 policy_id,
                 owner_id,
-                &state.config.brevo_owner_reminder_urgent_template_id,
-                "owner-urgent",
+                "owner_reminder_urgent",
+                "owner_urgent",
                 now,
                 pending_at,
                 &owner_name,
@@ -607,8 +607,8 @@ async fn enqueue_owner_reminders(
                 state,
                 policy_id,
                 owner_id,
-                &state.config.brevo_owner_reminder_daily_template_id,
-                "owner-daily",
+                "owner_reminder_daily",
+                "owner_daily",
                 now,
                 pending_at,
                 &owner_name,
@@ -626,7 +626,7 @@ async fn enqueue_owner_notification(
     state: &AppState,
     policy_id: Uuid,
     owner_id: Uuid,
-    template_id: &str,
+    template_name: &str,
     dedupe_prefix: &str,
     now: DateTime<Utc>,
     pending_at: DateTime<Utc>,
@@ -648,7 +648,7 @@ async fn enqueue_owner_notification(
             NotifyJob {
                 policy_id: Some(policy_id),
                 email,
-                template_id: template_id.to_string(),
+                template_name: template_name.to_string(),
                 params,
                 dedupe_key,
                 attempts: 0,
@@ -703,9 +703,16 @@ fn cadence_days(cadence: &str) -> i64 {
 
 fn decrypt_owner_name(key_b64: &str, enc_name_b64: &str, owner_id: Uuid) -> anyhow::Result<String> {
     let key_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(key_b64)?;
-    let key = Key::from_slice(&key_bytes);
     let enc_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(enc_name_b64)?;
     let aad = owner_id.as_bytes();
-    let name_bytes = decrypt(key, &enc_bytes, Some(aad)).map_err(|_| anyhow::anyhow!("Decryption failed"))?;
+
+    if enc_bytes.len() < 24 {
+        return Err(anyhow::anyhow!("Invalid encrypted name length"));
+    }
+
+    let (nonce, ciphertext) = enc_bytes.split_at(24);
+    let name_bytes = decrypt(&key_bytes, nonce, ciphertext, aad)
+        .map_err(|_| anyhow::anyhow!("Decryption failed"))?;
+
     Ok(String::from_utf8(name_bytes)?)
 }

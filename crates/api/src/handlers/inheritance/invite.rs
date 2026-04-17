@@ -10,7 +10,7 @@ use crate::db::queries::stepup::{fetch_stepup_challenge_tx, consume_stepup_chall
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{AeadJson, AeadResponse, wrap_response};
 use crate::middleware::rate_limit::require_idempotency;
-use crate::notifications::brevo::send_invite_email;
+// use crate::notifications::resend::send_notification;
 use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::services::hmac::compute_hmac;
 use transfer_legacy_crypto_core::aead::decrypt;
@@ -101,7 +101,7 @@ pub async fn create_invite(
 
     let policy_name = policy.label.unwrap_or_else(|| "Legacy Plan".to_string());
 
-    let template = crate::notifications::brevo::NotificationTemplate::Invite {
+    let template = crate::notifications::resend::NotificationTemplate::Invite {
         owner_name,
         policy_name,
         invite_url,

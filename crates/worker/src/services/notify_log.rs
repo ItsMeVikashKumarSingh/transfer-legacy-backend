@@ -11,7 +11,7 @@ pub async fn insert_queued(
     pool: &PgPool,
     policy_id: Option<Uuid>,
     recipient_email: &str,
-    template_id: &str,
+    template_name: &str,
     dedupe_key: &str,
 ) -> Result<bool, NotifyLogError> {
     let res = sqlx::query(
@@ -20,7 +20,7 @@ pub async fn insert_queued(
     .bind(Uuid::new_v4())
     .bind(policy_id)
     .bind(recipient_email)
-    .bind(template_id)
+    .bind(template_name)
     .bind("queued")
     .bind(dedupe_key)
     .execute(pool)

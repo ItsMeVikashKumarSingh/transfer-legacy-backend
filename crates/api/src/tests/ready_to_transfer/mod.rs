@@ -4,7 +4,7 @@ pub mod flows;
 mod tests {
     use crate::config::Config;
     use crate::db::queries::vault;
-    use crate::notifications::brevo::{send_notification, NotificationTemplate};
+    use crate::notifications::resend::{send_notification, NotificationTemplate};
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     use opaque_ke::{ClientRegistration, RegistrationResponse};
     use rand::rngs::OsRng;
@@ -153,8 +153,8 @@ mod tests {
         assert_eq!(saved.ciphertext, ciphertext);
         println!("✅ Success: Data read back verified");
 
-        // 8. Real Brevo Notification Verification
-        println!("✉️ Testing REAL Brevo Notification delivery...");
+        // 8. Real Resend Notification Verification
+        println!("✉️ Testing REAL Resend Notification delivery...");
         
         let mut origins = Vec::new();
         origins.push(axum::http::HeaderValue::from_static("http://localhost:3000"));
@@ -184,18 +184,8 @@ mod tests {
             supabase_publishable_key: "test".to_string(),
             supabase_secret_key: "test".to_string(),
             server_hmac_secret: "test-hmac".to_string(),
-            brevo_api_key: std::env::var("BREVO_API_KEY").unwrap_or_else(|_| "test-key".to_string()),
+            resend_api_key: std::env::var("RESEND_API_KEY").unwrap_or_else(|_| "test-key".to_string()),
             owner_email: "vikashbro111@gmail.com".to_string(),
-            security_template_id: "9".to_string(),
-            brevo_invite_template_id: "1".to_string(),
-            brevo_owner_reminder_early_template_id: "2".to_string(),
-            brevo_owner_reminder_urgent_template_id: "3".to_string(),
-            brevo_owner_reminder_daily_template_id: "4".to_string(),
-            brevo_beneficiary_claim_available_template_id: "5".to_string(),
-            brevo_approver_attestation_request_template_id: "6".to_string(),
-            brevo_conflict_hold_notice_template_id: "7".to_string(),
-            brevo_release_ready_template_id: "8".to_string(),
-            brevo_password_reset_template_id: "9".to_string(),
         };
         
         let test_email = "vikashbro111@gmail.com";
@@ -215,11 +205,11 @@ mod tests {
 
         match res {
             Ok(_) => println!("✅ REAL E-MAIL SENT SUCCESSFULLY to {}", test_email),
-            Err(e) => panic!("❌ Brevo Notification Failed: {}", e),
+            Err(e) => panic!("❌ Resend Notification Failed: {}", e),
         }
 
         println!(
-            "⭐ ALL SYSTEMS FUNCTIONAL: OPAQUE Handshake, core persistence, and Brevo verified."
+            "⭐ ALL SYSTEMS FUNCTIONAL: OPAQUE Handshake, core persistence, and Resend verified."
         );
     }
 }
