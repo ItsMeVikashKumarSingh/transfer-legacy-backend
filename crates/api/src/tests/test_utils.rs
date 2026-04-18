@@ -28,6 +28,10 @@ pub struct TestContext {
 }
 
 pub async fn spawn_app() -> TestContext {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("info,transfer_legacy_api=info")
+        .try_init();
+
     // Attempt to load from environment first (for local tests with .env.local),
     // then fallback to real OpenBao load if needed.
     let config = if let Ok(c) = Config::from_env() {
@@ -43,7 +47,7 @@ pub async fn spawn_app() -> TestContext {
         .expect("Failed to connect to test DB");
 
     // Automatically run migrations for fresh test environments, skip if requested
-    if std::env::var("SKIP_MIGRATIONS").is_err() {
+    if std::env::var("SKIP_MIGRATIONS").unwrap_or_default() != "true" {
         sqlx::migrate!("../../migrations")
             .run(&pool)
             .await

@@ -2,7 +2,7 @@ pub mod flows;
 
 #[cfg(test)]
 mod tests {
-    use crate::config::Config;
+    use crate::config::{Config, Environment};
     use crate::db::queries::vault;
     use crate::notifications::resend::{send_notification, NotificationTemplate};
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -170,6 +170,7 @@ mod tests {
         ));
 
         let config = Config {
+            environment: Environment::Local,
             bind_addr: "127.0.0.1".to_string(),
             port: 8080,
             allowed_origins: origins,
@@ -178,6 +179,7 @@ mod tests {
             internal_api_token: Some("test-token".to_string()),
             database_url: db_url,
             redis_url: "redis://127.0.0.1:6379/1".to_string(),
+            bao_path: "secret/data/transfer-legacy/prod".to_string(),
             openbao_addr: "http://127.0.0.1:8200".to_string(),
             openbao_token: "test".to_string(),
             openbao_version: 1,

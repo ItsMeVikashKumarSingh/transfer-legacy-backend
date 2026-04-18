@@ -1,4 +1,4 @@
-use axum::http::HeaderValue;
+use axum::http::HeaderValue as ax_http_header;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -37,7 +37,7 @@ pub struct Config {
     pub environment: Environment,
     pub bind_addr: String,
     pub port: u16,
-    pub allowed_origins: Vec<HeaderValue>,
+    pub allowed_origins: Vec<ax_http_header>,
     pub app_url: String,
     pub brand_name: String,
     pub internal_api_token: Option<String>,
@@ -78,31 +78,50 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OpenBaoSecrets {
+    #[serde(alias = "SERVER_AEAD_KEY_B64", alias = "SERVER_AEAD_KEY")]
     pub server_aead_key: String,
+    #[serde(alias = "OPAQUE_SERVER_SETUP_B64", alias = "OPAQUE_SERVER_SETUP")]
     pub opaque_server_setup: String,
+    #[serde(alias = "JWT_SECRET")]
     pub jwt_secret: String,
+    #[serde(alias = "SERVER_HMAC_SECRET")]
     pub server_hmac_secret: String,
+    #[serde(alias = "RESEND_API_KEY")]
     pub resend_api_key: String,
+    #[serde(alias = "SUPABASE_URL")]
     pub supabase_url: String,
+    #[serde(alias = "SUPABASE_PUBLISHABLE_KEY")]
     pub supabase_publishable_key: String,
+    #[serde(alias = "SUPABASE_SECRET_KEY")]
     pub supabase_secret_key: String,
+    #[serde(alias = "B2_KEY_ID", alias = "BACKBLAZE_B2_KEY_ID")]
     pub backblaze_b2_key_id: String,
+    #[serde(alias = "B2_APP_KEY", alias = "BACKBLAZE_B2_APP_KEY")]
     pub backblaze_b2_app_key: String,
+    #[serde(alias = "B2_BUCKET_NAME", alias = "BACKBLAZE_B2_BUCKET_NAME")]
     pub backblaze_b2_bucket_name: String,
+    #[serde(alias = "B2_AUDIT_BUCKET_NAME", alias = "BACKBLAZE_B2_AUDIT_BUCKET_NAME")]
     pub backblaze_b2_audit_bucket_name: String,
+    #[serde(alias = "B2_BACKUP_BUCKET_NAME", alias = "BACKBLAZE_B2_BACKUP_BUCKET_NAME")]
     pub backblaze_b2_backup_bucket_name: String,
+    #[serde(alias = "B2_ENDPOINT_URL", alias = "BACKBLAZE_B2_ENDPOINT_URL")]
     pub backblaze_b2_endpoint_url: String,
+    #[serde(alias = "INTERNAL_API_TOKEN")]
     pub internal_api_token: Option<String>,
+    #[serde(alias = "OWNER_EMAIL")]
     pub owner_email: String,
+    #[serde(alias = "APP_URL")]
     pub app_url: String,
+    #[serde(alias = "BRAND_NAME")]
     pub brand_name: String,
+    #[serde(alias = "REDIS_URL")]
     pub redis_url: Option<String>,
+    #[serde(alias = "DATABASE_URL")]
     pub database_url: Option<String>,
 }
 
 impl Config {
     pub async fn load() -> Result<Self, ConfigError> {
-        // ... (existing OpenBao load logic)
         // 1. Gather Bootstrap Env Vars
         let bind_addr = env::var("TL_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0".to_string());
         let port_str = env::var("TL_PORT").unwrap_or_else(|_| "8080".to_string());
@@ -120,7 +139,7 @@ impl Config {
         let role_id = env::var("ROLE_ID").map_err(|_| ConfigError::MissingVar("ROLE_ID"))?;
         let secret_id = env::var("SECRET_ID").map_err(|_| ConfigError::MissingVar("SECRET_ID"))?;
 
-        // 3. Authenticate with AppRole to get a token
+        // 2. Authenticate with AppRole to get a token
         let client = Client::new();
         let auth_url = format!("{}/v1/auth/approle/login", openbao_addr);
         let auth_res = client
@@ -178,37 +197,40 @@ impl Config {
         let s = body.data.data;
         let openbao_version = body.data.metadata.version;
 
-        let allowed_origins = vec![HeaderValue::from_str(&s.app_url).unwrap()];
+        let allowed_origins = vec![ax_http_header::from_str(s.app_url.trim()).unwrap()];
+
+        tracing::info!("Config loaded from OpenBao. AEAD Key Hash: {}", hash_value(s.server_aead_key.trim()));
+        println!("🚀 [DIAGNOSTIC] Config loaded from OpenBao. AEAD Key Hash: {}", hash_value(s.server_aead_key.trim()));
 
         Ok(Self {
             environment,
             bind_addr,
             port,
             allowed_origins,
-            app_url: s.app_url,
-            brand_name: s.brand_name,
-            internal_api_token: s.internal_api_token,
-            database_url: s.database_url.unwrap_or_default(),
-            redis_url: s.redis_url.unwrap_or_default(),
+            app_url: s.app_url.trim().to_string(),
+            brand_name: s.brand_name.trim().to_string(),
+            internal_api_token: s.internal_api_token.map(|t| t.trim().to_string()),
+            database_url: s.database_url.unwrap_or_default().trim().to_string(),
+            redis_url: s.redis_url.unwrap_or_default().trim().to_string(),
             bao_path,
             openbao_addr,
             openbao_token,
             openbao_version,
-            b2_key_id: s.backblaze_b2_key_id,
-            b2_app_key: s.backblaze_b2_app_key,
-            b2_bucket_name: s.backblaze_b2_bucket_name,
-            b2_audit_bucket_name: s.backblaze_b2_audit_bucket_name,
-            b2_backup_bucket_name: s.backblaze_b2_backup_bucket_name,
-            b2_endpoint_url: s.backblaze_b2_endpoint_url,
-            server_aead_key_b64: s.server_aead_key,
-            opaque_server_setup_b64: s.opaque_server_setup,
-            jwt_secret: s.jwt_secret,
-            supabase_url: s.supabase_url,
-            supabase_publishable_key: s.supabase_publishable_key,
-            supabase_secret_key: s.supabase_secret_key,
-            server_hmac_secret: s.server_hmac_secret,
-            resend_api_key: s.resend_api_key,
-            owner_email: s.owner_email,
+            b2_key_id: s.backblaze_b2_key_id.trim().to_string(),
+            b2_app_key: s.backblaze_b2_app_key.trim().to_string(),
+            b2_bucket_name: s.backblaze_b2_bucket_name.trim().to_string(),
+            b2_audit_bucket_name: s.backblaze_b2_audit_bucket_name.trim().to_string(),
+            b2_backup_bucket_name: s.backblaze_b2_backup_bucket_name.trim().to_string(),
+            b2_endpoint_url: s.backblaze_b2_endpoint_url.trim().to_string(),
+            server_aead_key_b64: s.server_aead_key.trim().to_string(),
+            opaque_server_setup_b64: s.opaque_server_setup.trim().to_string(),
+            jwt_secret: s.jwt_secret.trim().to_string(),
+            supabase_url: s.supabase_url.trim().to_string(),
+            supabase_publishable_key: s.supabase_publishable_key.trim().to_string(),
+            supabase_secret_key: s.supabase_secret_key.trim().to_string(),
+            server_hmac_secret: s.server_hmac_secret.trim().to_string(),
+            resend_api_key: s.resend_api_key.trim().to_string(),
+            owner_email: s.owner_email.trim().to_string(),
         })
     }
 
@@ -225,8 +247,16 @@ impl Config {
         let tl_env_str = env::var("TL_ENV").unwrap_or_else(|_| "local".to_string());
         let environment = Environment::from(tl_env_str.as_str());
 
-        let app_url = env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
-        let allowed_origins = vec![HeaderValue::from_str(&app_url).unwrap()];
+        let app_url = env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string()).trim().to_string();
+        let allowed_origins = vec![ax_http_header::from_str(&app_url).unwrap()];
+        
+        let aead_key = env::var("SERVER_AEAD_KEY_B64")
+            .or_else(|_| env::var("SERVER_AEAD_KEY"))
+            .map_err(|_| ConfigError::MissingVar("SERVER_AEAD_KEY_B64"))?
+            .trim()
+            .to_string();
+
+        tracing::info!("Config loaded from Env. AEAD Key Hash: {}", hash_value(&aead_key));
 
         Ok(Self {
             environment,
@@ -234,41 +264,59 @@ impl Config {
             port,
             allowed_origins,
             app_url,
-            brand_name: env::var("BRAND_NAME").unwrap_or_else(|_| "Transfer Legacy".into()),
-            internal_api_token: env::var("INTERNAL_API_TOKEN").ok(),
+            brand_name: env::var("BRAND_NAME").unwrap_or_else(|_| "Transfer Legacy".into()).trim().to_string(),
+            internal_api_token: env::var("INTERNAL_API_TOKEN").ok().map(|t| t.trim().to_string()),
             database_url: env::var("DATABASE_URL")
-                .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?,
-            redis_url: env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?,
+                .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?
+                .trim()
+                .to_string(),
+            redis_url: env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?
+                .trim()
+                .to_string(),
             bao_path: env::var("BAO_PATH")
-                .unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string()),
-            openbao_addr: env::var("OPENBAO_ADDR").unwrap_or_default(),
+                .unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string())
+                .trim()
+                .to_string(),
+            openbao_addr: env::var("OPENBAO_ADDR").unwrap_or_default().trim().to_string(),
             openbao_token: "".to_string(),
             openbao_version: 0,
-            b2_key_id: env::var("B2_KEY_ID").unwrap_or_default(),
-            b2_app_key: env::var("B2_APP_KEY").unwrap_or_default(),
-            b2_bucket_name: env::var("B2_BUCKET_NAME").unwrap_or_default(),
-            b2_audit_bucket_name: env::var("B2_AUDIT_BUCKET_NAME").unwrap_or_default(),
-            b2_backup_bucket_name: env::var("B2_BACKUP_BUCKET_NAME").unwrap_or_default(),
-            b2_endpoint_url: env::var("B2_ENDPOINT_URL").unwrap_or_default(),
-            server_aead_key_b64: env::var("SERVER_AEAD_KEY_B64")
-                .or_else(|_| env::var("SERVER_AEAD_KEY"))
-                .map_err(|_| ConfigError::MissingVar("SERVER_AEAD_KEY_B64"))?,
+            b2_key_id: env::var("B2_KEY_ID").unwrap_or_default().trim().to_string(),
+            b2_app_key: env::var("B2_APP_KEY").unwrap_or_default().trim().to_string(),
+            b2_bucket_name: env::var("B2_BUCKET_NAME").unwrap_or_default().trim().to_string(),
+            b2_audit_bucket_name: env::var("B2_AUDIT_BUCKET_NAME").unwrap_or_default().trim().to_string(),
+            b2_backup_bucket_name: env::var("B2_BACKUP_BUCKET_NAME").unwrap_or_default().trim().to_string(),
+            b2_endpoint_url: env::var("B2_ENDPOINT_URL").unwrap_or_default().trim().to_string(),
+            server_aead_key_b64: aead_key,
             opaque_server_setup_b64: env::var("OPAQUE_SERVER_SETUP_B64")
                 .or_else(|_| env::var("OPAQUE_SERVER_SETUP"))
-                .map_err(|_| ConfigError::MissingVar("OPAQUE_SERVER_SETUP_B64"))?,
+                .map_err(|_| ConfigError::MissingVar("OPAQUE_SERVER_SETUP_B64"))?
+                .trim()
+                .to_string(),
             jwt_secret: env::var("JWT_SECRET")
-                .map_err(|_| ConfigError::MissingVar("JWT_SECRET"))?,
+                .map_err(|_| ConfigError::MissingVar("JWT_SECRET"))?
+                .trim()
+                .to_string(),
             supabase_url: env::var("SUPABASE_URL")
-                .map_err(|_| ConfigError::MissingVar("SUPABASE_URL"))?,
+                .map_err(|_| ConfigError::MissingVar("SUPABASE_URL"))?
+                .trim()
+                .to_string(),
             supabase_publishable_key: env::var("SUPABASE_PUBLISHABLE_KEY")
-                .map_err(|_| ConfigError::MissingVar("SUPABASE_PUBLISHABLE_KEY"))?,
+                .map_err(|_| ConfigError::MissingVar("SUPABASE_PUBLISHABLE_KEY"))?
+                .trim()
+                .to_string(),
             supabase_secret_key: env::var("SUPABASE_SECRET_KEY")
-                .map_err(|_| ConfigError::MissingVar("SUPABASE_SECRET_KEY"))?,
+                .map_err(|_| ConfigError::MissingVar("SUPABASE_SECRET_KEY"))?
+                .trim()
+                .to_string(),
             server_hmac_secret: env::var("SERVER_HMAC_SECRET")
-                .map_err(|_| ConfigError::MissingVar("SERVER_HMAC_SECRET"))?,
+                .map_err(|_| ConfigError::MissingVar("SERVER_HMAC_SECRET"))?
+                .trim()
+                .to_string(),
             resend_api_key: env::var("RESEND_API_KEY")
-                .map_err(|_| ConfigError::MissingVar("RESEND_API_KEY"))?,
-            owner_email: env::var("OWNER_EMAIL").unwrap_or_default(),
+                .map_err(|_| ConfigError::MissingVar("RESEND_API_KEY"))?
+                .trim()
+                .to_string(),
+            owner_email: env::var("OWNER_EMAIL").unwrap_or_default().trim().to_string(),
         })
     }
 
@@ -344,7 +392,6 @@ fn hash_value(val: &str) -> String {
 }
 
 fn mask_url(url: &str) -> String {
-    // Very simple masking for URLs (hiding pass)
     if let Some(at) = url.find('@') {
         if let Some(start) = url.find("://") {
             return format!("{}...{}", &url[..start + 3], &url[at..]);

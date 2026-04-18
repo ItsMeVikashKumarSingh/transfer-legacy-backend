@@ -32,7 +32,7 @@ pub async fn insert_item(
 ) -> Result<Uuid, sqlx::Error> {
     let item_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO vault.items (item_id, user_id, ciphertext, item_meta, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5,$6)",
+        "INSERT INTO core.items (item_id, user_id, ciphertext, item_meta, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5,$6)",
     )
     .bind(item_id)
     .bind(user_id)
@@ -48,7 +48,7 @@ pub async fn insert_item(
 
 pub async fn list_items(pool: &PgPool, user_id: Uuid) -> Result<Vec<VaultItemRow>, sqlx::Error> {
     let rows = sqlx::query_as::<_, (Uuid, Uuid, Vec<u8>, Option<Value>, chrono::DateTime<chrono::Utc>)>(
-        "SELECT item_id, user_id, ciphertext, item_meta, created_at FROM vault.items WHERE user_id = $1 AND is_deleted = false",
+        "SELECT item_id, user_id, ciphertext, item_meta, created_at FROM core.items WHERE user_id = $1 AND is_deleted = false",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -111,7 +111,7 @@ pub async fn insert_share(
 ) -> Result<Uuid, sqlx::Error> {
     let share_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO vault.shares (share_id, item_id, owner_id, grantee_id, envelope, grant_sig, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+        "INSERT INTO core.shares (share_id, item_id, owner_id, grantee_id, envelope, grant_sig, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
     )
     .bind(share_id)
     .bind(item_id)
@@ -129,7 +129,7 @@ pub async fn insert_share(
 
 pub async fn list_shares(pool: &PgPool, owner_id: Uuid) -> Result<Vec<VaultShareRow>, sqlx::Error> {
     let rows = sqlx::query_as::<_, (Uuid, Uuid, Uuid, Uuid, Vec<u8>, Vec<u8>, chrono::DateTime<chrono::Utc>)>(
-        "SELECT share_id, item_id, owner_id, grantee_id, envelope, grant_sig, created_at FROM vault.shares WHERE owner_id = $1 AND is_deleted = false",
+        "SELECT share_id, item_id, owner_id, grantee_id, envelope, grant_sig, created_at FROM core.shares WHERE owner_id = $1 AND is_deleted = false",
     )
     .bind(owner_id)
     .fetch_all(pool)
@@ -155,7 +155,7 @@ pub async fn list_shares_for_grantee_owner(
     grantee_id: Uuid,
 ) -> Result<Vec<VaultShareRow>, sqlx::Error> {
     let rows = sqlx::query_as::<_, (Uuid, Uuid, Uuid, Uuid, Vec<u8>, Vec<u8>, chrono::DateTime<chrono::Utc>)>(
-        "SELECT share_id, item_id, owner_id, grantee_id, envelope, grant_sig, created_at FROM vault.shares WHERE owner_id = $1 AND grantee_id = $2 AND is_deleted = false",
+        "SELECT share_id, item_id, owner_id, grantee_id, envelope, grant_sig, created_at FROM core.shares WHERE owner_id = $1 AND grantee_id = $2 AND is_deleted = false",
     )
     .bind(owner_id)
     .bind(grantee_id)
@@ -182,7 +182,7 @@ pub async fn revoke_share(
     share_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE vault.shares SET is_deleted = true, deleted_at = now() WHERE owner_id = $1 AND share_id = $2",
+        "UPDATE core.shares SET is_deleted = true, deleted_at = now() WHERE owner_id = $1 AND share_id = $2",
     )
     .bind(owner_id)
     .bind(share_id)

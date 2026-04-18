@@ -7,8 +7,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE_NAME: ${{ github.repository }}/transfer-legacy-api
-  WORKER_IMAGE_NAME: ${{ github.repository }}/transfer-legacy-worker
+  # Use lowercase for registry names
+  API_IMAGE_NAME: itsmevikashkumarsingh/transfer-legacy-backend/transfer-legacy-api
+  WORKER_IMAGE_NAME: itsmevikashkumarsingh/transfer-legacy-backend/transfer-legacy-worker
 
 jobs:
   deploy:
@@ -26,30 +27,33 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push API (amd64, arm64)
+
+      - name: Build and Push API
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: |
             ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ github.ref_name }}
             ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:latest
           build-args: |
             BIN_NAME=transfer-legacy-api
-      - name: Build and Push Worker (amd64, arm64)
+
+      - name: Build and Push Worker
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: |
             ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${{ github.ref_name }}
             ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:latest
           build-args: |
             BIN_NAME=transfer-legacy-worker
+
       - name: Deploy via SSH
         if: secrets.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@v1.0.3
@@ -58,22 +62,22 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            mkdir -p /opt/transfer-legacy
+            PROJECT_DIR="/opt/transfer-legacy"
+            mkdir -p $PROJECT_DIR
+            cd $PROJECT_DIR
             
-            # Synchronize bootstrap environment from GitHub Secrets
-            echo "OPENBAO_ADDR=${{ secrets.OPENBAO_ADDR }}" > /opt/transfer-legacy/.env
-            echo "ROLE_ID=${{ secrets.ROLE_ID }}" >> /opt/transfer-legacy/.env
-            echo "SECRET_ID=${{ secrets.SECRET_ID }}" >> /opt/transfer-legacy/.env
-            echo "TL_ENV=${{ secrets.TL_ENV || 'production' }}" >> /opt/transfer-legacy/.env
-            echo "BAO_PATH=${{ secrets.BAO_PATH || 'secret/data/transfer-legacy/prod' }}" >> /opt/transfer-legacy/.env
+            # --- Setup Bootstrap Env ---
+            # These are the ONLY keys that stay on the disk.
+            # Everything else is fetched from Vault.
+            echo "ROLE_ID=${{ secrets.ROLE_ID }}" > .env
+            echo "SECRET_ID=${{ secrets.SECRET_ID }}" >> .env
+            echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
             
-            # Pull new images
-            docker pull ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ github.ref_name }}
-            docker pull ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${{ github.ref_name }}
+            # Pull Latest
+            docker compose pull
             
-            # Tag as latest
-            docker tag ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ github.ref_name }} transfer-legacy-api:latest
-            docker tag ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${{ github.ref_name }} transfer-legacy-worker:latest
+            # Restart Services
+            docker compose up -d --force-recreate
             
-            # Restart with force-recreate to load new environment
-            docker compose -f /opt/transfer-legacy/docker-compose.yml up -d --force-recreate
+            # Cleanup old images to save space
+            docker image prune -f

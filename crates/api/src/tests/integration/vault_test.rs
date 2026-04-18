@@ -5,7 +5,8 @@ use transfer_legacy_shared_types::models::auth::{
     RegisterFinishRequest, RegisterFinishResponse, RegisterInitRequest, RegisterInitResponse,
 };
 use transfer_legacy_shared_types::models::vault::{
-    CreateItemRequest, CreateItemResponse, GetItemResponse, ItemSummary, ListItemsResponse,
+    CreateItemRequest, CreateItemResponse, DeleteItemResponse, GetItemResponse, ItemSummary,
+    ListItemsResponse,
 };
 use uuid::Uuid;
 
@@ -29,13 +30,13 @@ async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, password: &str
     let reg_finish_req = RegisterFinishRequest {
         session_id: reg_init_res.session_id,
         registration_upload: reg_upload,
-        ed25519_pubkey: "test-pubkey".to_string(),
-        x25519_pubkey: "test-pubkey".to_string(),
-        kyber768_pubkey: "test-pubkey".to_string(),
-        emk_blob: "test-emk".to_string(),
+        ed25519_pubkey: URL_SAFE_NO_PAD.encode(b"test-pubkey"),
+        x25519_pubkey: URL_SAFE_NO_PAD.encode(b"test-pubkey"),
+        kyber768_pubkey: URL_SAFE_NO_PAD.encode(b"test-pubkey"),
+        emk_blob: URL_SAFE_NO_PAD.encode(b"test-emk"),
         argon2_params: serde_json::json!({"t": 1, "m": 65536, "p": 4}),
-        enc_legal_name: "test-enc".to_string(),
-        enc_email: "test-enc".to_string(),
+        enc_legal_name: URL_SAFE_NO_PAD.encode(b"test-enc"),
+        enc_email: URL_SAFE_NO_PAD.encode(b"test-enc"),
     };
     let _: RegisterFinishResponse = client
         .post_aead("/v1/auth/register/finish", &reg_finish_req)
@@ -74,6 +75,9 @@ async fn test_vault_lifecycle() {
     let mut client = CryptoClient::new(&ctx);
 
     let user_id = Uuid::new_v4();
+    let email = format!("vault-test-{}@example.com", user_id);
+    crate::tests::test_utils::create_test_user(&ctx.db, user_id, &email).await;
+
     let password = "VaultPassword123!";
     let _token = get_auth_token(&mut client, user_id, password).await;
 
@@ -105,12 +109,21 @@ async fn test_vault_lifecycle() {
     // --- 3. Get Specific Item ---
     let fetched_item: GetItemResponse = client
         .post_aead(
-            &format!("/v1/vault/items/{}", item_id),
+            "/v1/vault/items/get",
             &serde_json::json!({"user_id": user_id, "item_id": item_id}),
         )
         .await;
     assert_eq!(fetched_item.item_id, item_id);
     assert_eq!(fetched_item.ciphertext, create_req.ciphertext);
+
+    // --- 4. Delete Item ---
+    let delete_res: DeleteItemResponse = client
+        .post_aead(
+            "/v1/vault/items/delete",
+            &serde_json::json!({"user_id": user_id, "item_id": item_id}),
+        )
+        .await;
+    assert_eq!(delete_res.status, "ok");
 
     println!("Successfully verified Vault lifecycle for {}", user_id);
 }

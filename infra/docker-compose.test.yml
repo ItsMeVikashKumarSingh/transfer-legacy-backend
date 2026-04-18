@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  test-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  test-redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  test-runner:
+    image: rust:1.91.1-bookworm
+    depends_on:
+      test-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+      test-vault:
+        condition: service_started
+    volumes:
+      - ..:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    working_dir: /app
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@test-db:5432/postgres
+      - REDIS_URL=redis://test-redis:6379
+      - TL_ENV=local
+      - OPENBAO_ADDR=http://test-vault:8200
+      - BAO_PATH=secret/data/transfer-legacy/local
+      - SKIP_MIGRATIONS=false
+      - MOCK_RESEND=true
+    command: cargo test --workspace -- --nocapture
+
+  test-vault:
+    image: openbao/openbao:2.0
+    environment:
+      - BAO_DEV_ROOT_TOKEN_ID=root
+      - BAO_ADDR=http://0.0.0.0:8200
+    ports:
+      - "8201:8200"
+    command: server -dev -dev-listen-address=0.0.0.0:8200
+
+volumes:
+  cargo-cache:
+  target-cache:

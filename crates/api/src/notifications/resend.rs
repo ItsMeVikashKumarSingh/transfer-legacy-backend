@@ -227,6 +227,12 @@ pub async fn send_notification(
         html: rendered_html,
     };
 
+    // --- Mock Mode Check ---
+    if config.resend_api_key.starts_with("re_mock_") {
+        println!("✉️ MOCK EMAIL LOG: To: {}, Subject: {}", to_email, template.subject());
+        return Ok(());
+    }
+
     let res = client
         .post(url)
         .header("Authorization", format!("Bearer {}", config.resend_api_key))

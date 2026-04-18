@@ -1,21 +1,35 @@
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: infra/docker/Dockerfile
+  api:
+    image: ghcr.io/itsmevikashkumarsingh/transfer-legacy-backend/transfer-legacy-api:latest
     restart: always
     environment:
       - OPENBAO_ADDR=http://openbao:8200
       - ROLE_ID=${ROLE_ID}
       - SECRET_ID=${SECRET_ID}
-      - BAO_PATH=secret/data/transfer-legacy/prod
+      - BAO_PATH=${BAO_PATH:-secret/data/transfer-legacy/prod}
       - RUST_LOG=info
-    # SIGHUP can be sent via: docker kill -s HUP <container_id>
     networks:
       - tl-network
     depends_on:
       openbao:
         condition: service_healthy
+
+  worker:
+    image: ghcr.io/itsmevikashkumarsingh/transfer-legacy-backend/transfer-legacy-worker:latest
+    restart: always
+    environment:
+      - OPENBAO_ADDR=http://openbao:8200
+      - ROLE_ID=${ROLE_ID}
+      - SECRET_ID=${SECRET_ID}
+      - BAO_PATH=${BAO_PATH:-secret/data/transfer-legacy/prod}
+      - RUST_LOG=info
+    networks:
+      - tl-network
+    depends_on:
+      openbao:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   openbao:
     image: openbao/openbao:latest
@@ -58,7 +72,7 @@ services:
     networks:
       - tl-network
     depends_on:
-      - backend
+      - api
 
 networks:
   tl-network:

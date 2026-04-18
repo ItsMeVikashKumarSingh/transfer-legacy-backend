@@ -65,8 +65,11 @@ where
             .map_err(|_| ApiError::app(AppError::AeadIntegrity))?;
         let aad = aad_from_headers(&headers);
 
-        let plaintext = decrypt(&key, &nonce, &ciphertext, &aad)
-            .map_err(|_| ApiError::app(AppError::AeadIntegrity))?;
+        let plaintext = decrypt(&key, &nonce, &ciphertext, &aad).map_err(|_| {
+            let err = ApiError::app(AppError::AeadIntegrity);
+            tracing::error!("AEAD Decryption failed: {:?}", err);
+            err
+        })?;
 
         let value = serde_json::from_slice::<T>(&plaintext)
             .map_err(|_| ApiError::app(AppError::BadRequest))?;
