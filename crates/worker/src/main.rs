@@ -18,9 +18,17 @@ async fn main() -> Result<(), std::io::Error> {
     lock_memory_pages();
     tracing::info!("worker starting");
 
-    let config = Config::load()
-        .await
-        .map_err(|e| std::io::Error::other(format!("config error: {}", e)))?;
+    // 1. Initial Load
+    let config = if std::env::var("TL_ENV").unwrap_or_else(|_| "local".to_string()) == "local" {
+        tracing::info!("Loading configuration from environment/dotenv...");
+        Config::from_env()
+            .map_err(|e| std::io::Error::other(format!("config error: {}", e)))?
+    } else {
+        tracing::info!("Loading configuration from OpenBao (Environment: {})...", std::env::var("TL_ENV").unwrap_or_else(|_| "unknown".into()));
+        Config::load()
+            .await
+            .map_err(|e| std::io::Error::other(format!("config error: {}", e)))?
+    };
     let db = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url)

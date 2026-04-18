@@ -64,6 +64,8 @@ jobs:
             echo "OPENBAO_ADDR=${{ secrets.OPENBAO_ADDR }}" > /opt/transfer-legacy/.env
             echo "ROLE_ID=${{ secrets.ROLE_ID }}" >> /opt/transfer-legacy/.env
             echo "SECRET_ID=${{ secrets.SECRET_ID }}" >> /opt/transfer-legacy/.env
+            echo "TL_ENV=${{ secrets.TL_ENV || 'production' }}" >> /opt/transfer-legacy/.env
+            echo "BAO_PATH=${{ secrets.BAO_PATH || 'secret/data/transfer-legacy/prod' }}" >> /opt/transfer-legacy/.env
             
             # Pull new images
             docker pull ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ github.ref_name }}

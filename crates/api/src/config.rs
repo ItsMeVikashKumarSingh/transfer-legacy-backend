@@ -3,9 +3,38 @@ use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::env;
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Environment {
+    Local,
+    Staging,
+    Production,
+}
+
+impl fmt::Display for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Local => write!(f, "local"),
+            Self::Staging => write!(f, "staging"),
+            Self::Production => write!(f, "production"),
+        }
+    }
+}
+
+impl From<&str> for Environment {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "staging" => Self::Staging,
+            "production" | "prod" => Self::Production,
+            _ => Self::Local,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub environment: Environment,
     pub bind_addr: String,
     pub port: u16,
     pub allowed_origins: Vec<HeaderValue>,
@@ -14,6 +43,7 @@ pub struct Config {
     pub internal_api_token: Option<String>,
     pub database_url: String,
     pub redis_url: String,
+    pub bao_path: String,
     pub openbao_addr: String,
     pub openbao_token: String,
     pub openbao_version: u32,
@@ -80,8 +110,13 @@ impl Config {
             .parse::<u16>()
             .map_err(|_| ConfigError::InvalidPort(port_str))?;
 
+        let tl_env_str = env::var("TL_ENV").unwrap_or_else(|_| "local".to_string());
+        let environment = Environment::from(tl_env_str.as_str());
+
         let openbao_addr =
             env::var("OPENBAO_ADDR").map_err(|_| ConfigError::MissingVar("OPENBAO_ADDR"))?;
+        let bao_path = env::var("BAO_PATH")
+            .unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string());
         let role_id = env::var("ROLE_ID").map_err(|_| ConfigError::MissingVar("ROLE_ID"))?;
         let secret_id = env::var("SECRET_ID").map_err(|_| ConfigError::MissingVar("SECRET_ID"))?;
 
@@ -114,7 +149,7 @@ impl Config {
         let openbao_token = auth_body.auth.client_token;
 
         // 3. Fetch All Configuration from OpenBao
-        let kv_url = format!("{}/v1/secret/data/transfer-legacy/prod", openbao_addr);
+        let kv_url = format!("{}/v1/{}", openbao_addr, bao_path);
         let res = client
             .get(kv_url)
             .header("X-Vault-Token", &openbao_token)
@@ -146,6 +181,7 @@ impl Config {
         let allowed_origins = vec![HeaderValue::from_str(&s.app_url).unwrap()];
 
         Ok(Self {
+            environment,
             bind_addr,
             port,
             allowed_origins,
@@ -154,6 +190,7 @@ impl Config {
             internal_api_token: s.internal_api_token,
             database_url: s.database_url.unwrap_or_default(),
             redis_url: s.redis_url.unwrap_or_default(),
+            bao_path,
             openbao_addr,
             openbao_token,
             openbao_version,
@@ -185,10 +222,14 @@ impl Config {
             .parse::<u16>()
             .map_err(|_| ConfigError::InvalidPort(port_str))?;
 
+        let tl_env_str = env::var("TL_ENV").unwrap_or_else(|_| "local".to_string());
+        let environment = Environment::from(tl_env_str.as_str());
+
         let app_url = env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
         let allowed_origins = vec![HeaderValue::from_str(&app_url).unwrap()];
 
         Ok(Self {
+            environment,
             bind_addr,
             port,
             allowed_origins,
@@ -198,6 +239,8 @@ impl Config {
             database_url: env::var("DATABASE_URL")
                 .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?,
             redis_url: env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?,
+            bao_path: env::var("BAO_PATH")
+                .unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string()),
             openbao_addr: env::var("OPENBAO_ADDR").unwrap_or_default(),
             openbao_token: "".to_string(),
             openbao_version: 0,

@@ -25,8 +25,14 @@ async fn main() -> Result<(), ApiError> {
     telemetry::init_tracing();
     telemetry::init_metrics();
 
-    // 1. Initial Load from OpenBao
-    let config = Config::load().await?;
+    // 1. Initial Load
+    let config = if std::env::var("TL_ENV").unwrap_or_else(|_| "local".to_string()) == "local" {
+        tracing::info!("Loading configuration from environment/dotenv...");
+        Config::from_env()?
+    } else {
+        tracing::info!("Loading configuration from OpenBao (Environment: {})...", std::env::var("TL_ENV").unwrap_or_else(|_| "unknown".into()));
+        Config::load().await?
+    };
     let state = state::AppState::new(config.clone()).await?;
 
     // 2. Setup Hot-Reload Listener (SIGHUP)
