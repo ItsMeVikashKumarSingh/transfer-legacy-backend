@@ -186,6 +186,7 @@ mod tests {
             b2_key_id: "test".to_string(),
             b2_app_key: "test".to_string(),
             b2_bucket_name: "test".to_string(),
+            b2_public_assets_bucket_name: "test-assets".to_string(),
             b2_audit_bucket_name: "test-audit".to_string(),
             b2_backup_bucket_name: "test-backup".to_string(),
             b2_endpoint_url: "http://localhost".to_string(),

@@ -1,5 +1,5 @@
 use axum::http::{HeaderName, HeaderValue, Method};
-use axum::middleware::from_fn;
+use axum::middleware::{from_fn, from_fn_with_state};
 use axum::{
     routing::{delete, get, post, put},
     Router,
@@ -182,6 +182,26 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
     let gdpr_routes = Router::new()
         .route("/export", post(crate::handlers::gdpr::export_gdpr))
         .route("/erase", post(crate::handlers::gdpr::erase_gdpr));
+        
+    let app_routes = Router::new()
+        .route("/branding", get(crate::handlers::app::get_branding))
+        .route("/content/:slug", get(crate::handlers::app::get_content))
+        .route("/waitlist", post(crate::handlers::app::waitlist_signup))
+        .route(
+            "/branding",
+            put(crate::handlers::app::update_branding_handler)
+                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
+        )
+        .route(
+            "/content",
+            put(crate::handlers::app::update_content_handler)
+                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
+        )
+        .route(
+            "/waitlist",
+            get(crate::handlers::app::list_waitlist_entries_handler)
+                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
+        );
 
     let ops_routes = Router::new()
         .route("/reviews", get(crate::handlers::ops::list_reviews))
@@ -189,7 +209,12 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route(
             "/reviews/:review_id/decision",
             post(crate::handlers::ops::review_decision),
-        );
+        )
+        .route(
+            "/storage/presigned-logo",
+            post(crate::handlers::ops::get_presigned_logo_upload),
+        )
+        .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth));
 
     Router::new()
         .route("/health", get(health))
@@ -207,6 +232,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .nest("/v1/claims", claims_routes)
         .nest("/v1/audit", audit_routes)
         .nest("/v1/gdpr", gdpr_routes)
+        .nest("/v1/app", app_routes)
         .nest("/v1/ops", ops_routes)
         .with_state(state)
         .layer(from_fn(crate::middleware::metrics::metrics_middleware))

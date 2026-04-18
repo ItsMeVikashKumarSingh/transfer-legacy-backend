@@ -50,6 +50,7 @@ pub struct Config {
     pub b2_key_id: String,
     pub b2_app_key: String,
     pub b2_bucket_name: String,
+    pub b2_public_assets_bucket_name: String,
     pub b2_audit_bucket_name: String,
     pub b2_backup_bucket_name: String,
     pub b2_endpoint_url: String,
@@ -100,6 +101,8 @@ pub struct OpenBaoSecrets {
     pub backblaze_b2_app_key: String,
     #[serde(alias = "B2_BUCKET_NAME", alias = "BACKBLAZE_B2_BUCKET_NAME")]
     pub backblaze_b2_bucket_name: String,
+    #[serde(alias = "B2_PUBLIC_ASSETS_BUCKET_NAME", alias = "BACKBLAZE_B2_PUBLIC_ASSETS_BUCKET_NAME")]
+    pub backblaze_b2_public_assets_bucket_name: String,
     #[serde(alias = "B2_AUDIT_BUCKET_NAME", alias = "BACKBLAZE_B2_AUDIT_BUCKET_NAME")]
     pub backblaze_b2_audit_bucket_name: String,
     #[serde(alias = "B2_BACKUP_BUCKET_NAME", alias = "BACKBLAZE_B2_BACKUP_BUCKET_NAME")]
@@ -219,6 +222,7 @@ impl Config {
             b2_key_id: s.backblaze_b2_key_id.trim().to_string(),
             b2_app_key: s.backblaze_b2_app_key.trim().to_string(),
             b2_bucket_name: s.backblaze_b2_bucket_name.trim().to_string(),
+            b2_public_assets_bucket_name: s.backblaze_b2_public_assets_bucket_name.trim().to_string(),
             b2_audit_bucket_name: s.backblaze_b2_audit_bucket_name.trim().to_string(),
             b2_backup_bucket_name: s.backblaze_b2_backup_bucket_name.trim().to_string(),
             b2_endpoint_url: s.backblaze_b2_endpoint_url.trim().to_string(),
@@ -247,10 +251,11 @@ impl Config {
         let tl_env_str = env::var("TL_ENV").unwrap_or_else(|_| "local".to_string());
         let environment = Environment::from(tl_env_str.as_str());
 
-        let app_url = env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string()).trim().to_string();
+        let app_url = env::var("TL_APP_URL").or_else(|_| env::var("APP_URL")).unwrap_or_else(|_| "http://localhost:3000".to_string()).trim().to_string();
         let allowed_origins = vec![ax_http_header::from_str(&app_url).unwrap()];
         
-        let aead_key = env::var("SERVER_AEAD_KEY_B64")
+        let aead_key = env::var("TL_SERVER_AEAD_KEY_B64")
+            .or_else(|_| env::var("SERVER_AEAD_KEY_B64"))
             .or_else(|_| env::var("SERVER_AEAD_KEY"))
             .map_err(|_| ConfigError::MissingVar("SERVER_AEAD_KEY_B64"))?
             .trim()
@@ -264,8 +269,8 @@ impl Config {
             port,
             allowed_origins,
             app_url,
-            brand_name: env::var("BRAND_NAME").unwrap_or_else(|_| "Transfer Legacy".into()).trim().to_string(),
-            internal_api_token: env::var("INTERNAL_API_TOKEN").ok().map(|t| t.trim().to_string()),
+            brand_name: env::var("TL_BRAND_NAME").or_else(|_| env::var("BRAND_NAME")).unwrap_or_else(|_| "Transfer Legacy".into()).trim().to_string(),
+            internal_api_token: env::var("TL_INTERNAL_API_TOKEN").or_else(|_| env::var("INTERNAL_API_TOKEN")).ok().map(|t| t.trim().to_string()),
             database_url: env::var("DATABASE_URL")
                 .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?
                 .trim()
@@ -283,6 +288,7 @@ impl Config {
             b2_key_id: env::var("B2_KEY_ID").unwrap_or_default().trim().to_string(),
             b2_app_key: env::var("B2_APP_KEY").unwrap_or_default().trim().to_string(),
             b2_bucket_name: env::var("B2_BUCKET_NAME").unwrap_or_default().trim().to_string(),
+            b2_public_assets_bucket_name: env::var("B2_PUBLIC_ASSETS_BUCKET_NAME").unwrap_or_default().trim().to_string(),
             b2_audit_bucket_name: env::var("B2_AUDIT_BUCKET_NAME").unwrap_or_default().trim().to_string(),
             b2_backup_bucket_name: env::var("B2_BACKUP_BUCKET_NAME").unwrap_or_default().trim().to_string(),
             b2_endpoint_url: env::var("B2_ENDPOINT_URL").unwrap_or_default().trim().to_string(),

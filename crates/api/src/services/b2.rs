@@ -18,6 +18,16 @@ pub async fn presign_put(
     content_type: &str,
     expires_secs: u64,
 ) -> Result<String, B2Error> {
+    presign_put_to_bucket(config, &config.b2_bucket_name, key, content_type, expires_secs).await
+}
+
+pub async fn presign_put_to_bucket(
+    config: &Config,
+    bucket: &str,
+    key: &str,
+    content_type: &str,
+    expires_secs: u64,
+) -> Result<String, B2Error> {
     let creds = Credentials::new(
         config.b2_key_id.clone(),
         config.b2_app_key.clone(),
@@ -36,7 +46,7 @@ pub async fn presign_put(
     let client = Client::from_conf(conf);
     let presigned = client
         .put_object()
-        .bucket(config.b2_bucket_name.clone())
+        .bucket(bucket)
         .key(key)
         .content_type(content_type)
         .presigned(

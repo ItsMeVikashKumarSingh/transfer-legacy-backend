@@ -22,3 +22,17 @@ pub async fn ensure_internal_access(
         None => Ok(()),
     }
 }
+
+use axum::middleware::Next;
+use axum::response::Response;
+use axum::extract::{Request, State};
+
+pub async fn administrative_auth(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    ensure_internal_access(&state, &headers).await?;
+    Ok(next.run(request).await)
+}
