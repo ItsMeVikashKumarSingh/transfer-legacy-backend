@@ -203,7 +203,19 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
                 .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
         );
 
-    let ops_routes = Router::new()
+    let protected_ops_routes = Router::new()
+        .route("/change-password", post(crate::handlers::ops::change_password_handler))
+        .route("/admins", get(crate::handlers::ops::list_admins_handler))
+        .route("/admins", post(crate::handlers::ops::create_admin_handler))
+        .route("/admins/:id", delete(crate::handlers::ops::delete_admin_handler))
+        .route("/roles", get(crate::handlers::ops::list_roles_handler))
+        .route("/roles", post(crate::handlers::ops::create_role_handler))
+        .route("/roles/:id", put(crate::handlers::ops::update_role_handler))
+        .route("/roles/:id", delete(crate::handlers::ops::delete_role_handler))
+        .route("/waitlist", get(crate::handlers::ops::list_waitlist_handler))
+        .route("/branding", get(crate::handlers::ops::get_branding_handler))
+        .route("/branding", put(crate::handlers::ops::update_branding_handler))
+        .route("/content", put(crate::handlers::ops::update_content_ops_handler))
         .route("/reviews", get(crate::handlers::ops::list_reviews))
         .route("/reviews/:review_id", get(crate::handlers::ops::get_review))
         .route(
@@ -214,7 +226,15 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             "/storage/presigned-logo",
             post(crate::handlers::ops::get_presigned_logo_upload),
         )
-        .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth));
+        .route("/logs", get(crate::handlers::ops::list_audit_logs_handler))
+        .layer(from_fn_with_state(
+            state.clone(),
+            crate::middleware::internal_auth::administrative_auth,
+        ));
+
+    let ops_routes = Router::new()
+        .route("/login", post(crate::handlers::ops::login_handler))
+        .nest("/", protected_ops_routes);
 
     Router::new()
         .route("/health", get(health))

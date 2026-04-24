@@ -11,3 +11,4 @@ pub mod share;
 pub mod user;
 pub mod vault;
 pub mod app;
+pub mod ops;

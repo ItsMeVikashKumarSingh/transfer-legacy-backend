@@ -7,6 +7,8 @@ pub struct BrandingConfig {
     pub brand_name: String,
     pub logo_url: Option<String>,
     pub support_email: Option<String>,
+    pub support_phone: Option<String>,
+    pub support_address: Option<String>,
     pub theme_config: Option<serde_json::Value>,
 }
 

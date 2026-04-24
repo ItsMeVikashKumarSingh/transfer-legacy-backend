@@ -37,6 +37,7 @@ metrics = "0.23"
 metrics-exporter-prometheus = "0.15"
 dotenvy = "0.15"
 anyhow = "1"
+argon2 = "0.5"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }
