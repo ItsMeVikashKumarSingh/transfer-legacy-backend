@@ -185,8 +185,11 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         
     let app_routes = Router::new()
         .route("/branding", get(crate::handlers::app::get_branding))
+        .route("/config", get(crate::handlers::app::get_branding))
         .route("/content/:slug", get(crate::handlers::app::get_content))
         .route("/waitlist", post(crate::handlers::app::waitlist_signup))
+        .route("/pages", get(crate::handlers::app::list_pages))
+        .route("/pages/:slug", get(crate::handlers::app::get_page))
         .route(
             "/branding",
             put(crate::handlers::app::update_branding_handler)
@@ -215,7 +218,15 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/waitlist", get(crate::handlers::ops::list_waitlist_handler))
         .route("/branding", get(crate::handlers::ops::get_branding_handler))
         .route("/branding", put(crate::handlers::ops::update_branding_handler))
+        .route("/contact", get(crate::handlers::ops::get_contact_handler))
+        .route("/contact", put(crate::handlers::ops::update_contact_handler))
+        .route("/contact/messages", get(crate::handlers::ops::list_contact_messages_handler))
+        .route("/contact/messages/:id", delete(crate::handlers::ops::delete_contact_message_handler))
         .route("/content", put(crate::handlers::ops::update_content_ops_handler))
+        .route("/pages", get(crate::handlers::ops::list_pages_ops))
+        .route("/pages/:slug", get(crate::handlers::ops::get_page_ops))
+        .route("/pages/:slug", put(crate::handlers::ops::upsert_page_ops))
+        .route("/pages/:slug", delete(crate::handlers::ops::delete_page_ops))
         .route("/reviews", get(crate::handlers::ops::list_reviews))
         .route("/reviews/:review_id", get(crate::handlers::ops::get_review))
         .route(

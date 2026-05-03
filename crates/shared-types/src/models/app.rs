@@ -57,3 +57,17 @@ pub struct WaitlistEntry {
     pub meta: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CmsPage {
+    pub id: Uuid,
+    pub title: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub body: serde_json::Value,
+    pub is_published: bool,
+    pub seo_meta: serde_json::Value,
+    pub updated_by: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}

@@ -1,5 +1,5 @@
 use sqlx::{Postgres, Pool};
-use transfer_legacy_shared_types::models::app::{BrandingConfig, AppContent, WaitlistEntry, WaitlistSignupRequest, ContactConfig, ContactMessage};
+use transfer_legacy_shared_types::models::app::{BrandingConfig, AppContent, WaitlistEntry, WaitlistSignupRequest, ContactConfig, ContactMessage, CmsPage};
 use uuid::Uuid;
 
 pub async fn fetch_branding(pool: &Pool<Postgres>) -> Result<BrandingConfig, sqlx::Error> {
@@ -117,6 +117,14 @@ pub async fn list_contact_messages(pool: &Pool<Postgres>) -> Result<Vec<ContactM
     }).collect())
 }
 
+pub async fn delete_contact_message(pool: &Pool<Postgres>, id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM app.contact_messages WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn fetch_app_content(pool: &Pool<Postgres>, slug: &str) -> Result<AppContent, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
@@ -186,4 +194,91 @@ pub async fn list_waitlist_entries(pool: &Pool<Postgres>) -> Result<Vec<Waitlist
         .collect();
 
     Ok(entries)
+}
+
+pub async fn list_cms_pages(pool: &Pool<Postgres>, only_published: bool) -> Result<Vec<CmsPage>, sqlx::Error> {
+    use sqlx::Row;
+    let query = if only_published {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE is_published = true ORDER BY updated_at DESC"
+    } else {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages ORDER BY updated_at DESC"
+    };
+    
+    let rows = sqlx::query(query).fetch_all(pool).await?;
+    
+    Ok(rows.into_iter().map(|r| CmsPage {
+        id: r.get("id"),
+        title: r.get("title"),
+        slug: r.get("slug"),
+        description: r.get("description"),
+        category: r.get("category"),
+        body: r.get("body"),
+        is_published: r.get("is_published"),
+        seo_meta: r.get("seo_meta"),
+        updated_by: r.get("updated_by"),
+        created_at: r.get("created_at"),
+        updated_at: r.get("updated_at"),
+    }).collect())
+}
+
+pub async fn fetch_cms_page_by_slug(pool: &Pool<Postgres>, slug: &str, only_published: bool) -> Result<CmsPage, sqlx::Error> {
+    use sqlx::Row;
+    let query = if only_published {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE slug = $1 AND is_published = true"
+    } else {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE slug = $1"
+    };
+    
+    let row = sqlx::query(query).bind(slug).fetch_one(pool).await?;
+    
+    Ok(CmsPage {
+        id: row.get("id"),
+        title: row.get("title"),
+        slug: row.get("slug"),
+        description: row.get("description"),
+        category: row.get("category"),
+        body: row.get("body"),
+        is_published: row.get("is_published"),
+        seo_meta: row.get("seo_meta"),
+        updated_by: row.get("updated_by"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+pub async fn upsert_cms_page(pool: &Pool<Postgres>, page: CmsPage) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO app.cms_pages (id, title, slug, description, category, body, is_published, seo_meta, updated_by, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) 
+         ON CONFLICT (slug) DO UPDATE SET 
+            title = EXCLUDED.title, 
+            description = EXCLUDED.description, 
+            category = EXCLUDED.category, 
+            body = EXCLUDED.body, 
+            is_published = EXCLUDED.is_published, 
+            seo_meta = EXCLUDED.seo_meta, 
+            updated_by = EXCLUDED.updated_by, 
+            updated_at = now()"
+    )
+    .bind(page.id)
+    .bind(page.title)
+    .bind(page.slug)
+    .bind(page.description)
+    .bind(page.category)
+    .bind(page.body)
+    .bind(page.is_published)
+    .bind(page.seo_meta)
+    .bind(page.updated_by)
+    .execute(pool)
+    .await?;
+    
+    Ok(())
+}
+
+pub async fn delete_cms_page(pool: &Pool<Postgres>, slug: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM app.cms_pages WHERE slug = $1")
+        .bind(slug)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
