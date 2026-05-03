@@ -55,7 +55,7 @@ jobs:
             BIN_NAME=transfer-legacy-worker
 
       - name: Deploy via SSH
-        if: secrets.DEPLOY_HOST != ''
+        if: ${{ secrets.DEPLOY_HOST != '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}

@@ -200,6 +200,8 @@ mod tests {
             resend_api_key: std::env::var("RESEND_API_KEY")
                 .unwrap_or_else(|_| "test-key".to_string()),
             owner_email: "vikashbro111@gmail.com".to_string(),
+            ops_admin_email: "admin@transferlegacy.com".to_string(),
+            ops_admin_password: "Admin@123".to_string(),
         };
 
         let test_email = "vikashbro111@gmail.com";

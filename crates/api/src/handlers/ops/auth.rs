@@ -15,7 +15,34 @@ pub async fn login_handler(
     Json(payload): Json<OpsLoginRequest>,
 ) -> Result<Json<OpsLoginResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let config = state.config().await;
 
+    // 1. Fallback Logic (similar to temp backend)
+    if payload.email.to_lowercase() == config.ops_admin_email.to_lowercase() 
+       && !config.ops_admin_password.is_empty() 
+       && payload.password == config.ops_admin_password 
+    {
+        let admin_id = Uuid::nil();
+        let role_name = "super_admin".to_string();
+        let token = auth_utils::generate_token(admin_id, &role_name, &config.jwt_secret).map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
+        return Ok(Json(OpsLoginResponse {
+            token,
+            admin: OpsAdmin {
+                id: admin_id,
+                email: config.ops_admin_email.clone(),
+                role_id: Uuid::nil(),
+                role_name,
+                is_active: true,
+                last_login: Some(chrono::Utc::now()),
+                created_at: chrono::Utc::now(),
+            },
+        }));
+    }
+
+    // 2. Database Logic
     let (admin_id, password_hash, role_name) = ops_queries::fetch_admin_by_email(&state.db, &payload.email)
         .await
         .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid))?;
@@ -28,7 +55,6 @@ pub async fn login_handler(
         return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
     }
 
-    let config = state.config().await;
     let token = auth_utils::generate_token(admin_id, &role_name, &config.jwt_secret).map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;

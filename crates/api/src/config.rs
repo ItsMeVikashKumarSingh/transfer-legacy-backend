@@ -63,6 +63,8 @@ pub struct Config {
     pub server_hmac_secret: String,
     pub resend_api_key: String,
     pub owner_email: String,
+    pub ops_admin_email: String,
+    pub ops_admin_password: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -121,6 +123,10 @@ pub struct OpenBaoSecrets {
     pub redis_url: Option<String>,
     #[serde(alias = "DATABASE_URL")]
     pub database_url: Option<String>,
+    #[serde(alias = "OPS_ADMIN_EMAIL")]
+    pub ops_admin_email: Option<String>,
+    #[serde(alias = "OPS_ADMIN_PASSWORD")]
+    pub ops_admin_password: Option<String>,
 }
 
 impl Config {
@@ -235,6 +241,8 @@ impl Config {
             server_hmac_secret: s.server_hmac_secret.trim().to_string(),
             resend_api_key: s.resend_api_key.trim().to_string(),
             owner_email: s.owner_email.trim().to_string(),
+            ops_admin_email: s.ops_admin_email.unwrap_or_else(|| "admin@transferlegacy.com".to_string()).trim().to_string(),
+            ops_admin_password: s.ops_admin_password.unwrap_or_default().trim().to_string(),
         })
     }
 
@@ -323,6 +331,8 @@ impl Config {
                 .trim()
                 .to_string(),
             owner_email: env::var("OWNER_EMAIL").unwrap_or_default().trim().to_string(),
+            ops_admin_email: env::var("OPS_ADMIN_EMAIL").unwrap_or_else(|_| "admin@transferlegacy.com".to_string()).trim().to_string(),
+            ops_admin_password: env::var("OPS_ADMIN_PASSWORD").unwrap_or_default().trim().to_string(),
         })
     }
 
