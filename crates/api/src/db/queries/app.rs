@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub async fn fetch_branding(pool: &Pool<Postgres>) -> Result<BrandingConfig, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
-        "SELECT brand_name, logo_url, support_email, support_phone, support_address, waitlist_enabled, theme_config FROM app.settings WHERE id = 1",
+        "SELECT brand_name, logo_url, support_email, support_phone, support_address, waitlist_enabled, maintenance_mode, registration_enabled, theme_config FROM app.settings WHERE id = 1",
     )
     .fetch_one(pool)
     .await?;
@@ -17,6 +17,8 @@ pub async fn fetch_branding(pool: &Pool<Postgres>) -> Result<BrandingConfig, sql
         support_phone: row.get("support_phone"),
         support_address: row.get("support_address"),
         waitlist_enabled: row.get("waitlist_enabled"),
+        maintenance_mode: row.get("maintenance_mode"),
+        registration_enabled: row.get("registration_enabled"),
         theme_config: row.get("theme_config"),
     })
 }
@@ -26,7 +28,7 @@ pub async fn update_branding(
     config: BrandingConfig,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE app.settings SET brand_name = $1, logo_url = $2, support_email = $3, support_phone = $4, support_address = $5, waitlist_enabled = $6, theme_config = $7, updated_at = now() WHERE id = 1",
+        "UPDATE app.settings SET brand_name = $1, logo_url = $2, support_email = $3, support_phone = $4, support_address = $5, waitlist_enabled = $6, maintenance_mode = $7, registration_enabled = $8, theme_config = $9, updated_at = now() WHERE id = 1",
     )
     .bind(config.brand_name)
     .bind(config.logo_url)
@@ -34,6 +36,8 @@ pub async fn update_branding(
     .bind(config.support_phone)
     .bind(config.support_address)
     .bind(config.waitlist_enabled)
+    .bind(config.maintenance_mode)
+    .bind(config.registration_enabled)
     .bind(config.theme_config)
     .execute(pool)
     .await?;

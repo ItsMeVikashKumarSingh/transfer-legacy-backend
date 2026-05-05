@@ -10,6 +10,8 @@ pub struct BrandingConfig {
     pub support_phone: Option<String>,
     pub support_address: Option<String>,
     pub waitlist_enabled: bool,
+    pub maintenance_mode: bool,
+    pub registration_enabled: bool,
     pub theme_config: Option<serde_json::Value>,
 }
 
