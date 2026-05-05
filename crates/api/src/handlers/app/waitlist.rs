@@ -17,10 +17,10 @@ pub async fn waitlist_signup(
     Extension(request_id): Extension<RequestId>,
     headers: HeaderMap,
     Json(mut req): Json<WaitlistSignupRequest>,
-) -> Result<Json<SuccessEnvelope<String>>, ApiError> {
+) -> Result<Json<SuccessEnvelope<serde_json::Value>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
-    // Industry Standard Metadata Extraction
+    // ... (omitting meta extraction for brevity, keeping existing logic)
     let mut meta = json!({
         "user_agent": headers.get("user-agent").and_then(|v| v.to_str().ok()),
         "referrer": headers.get("referer").and_then(|v| v.to_str().ok()),
@@ -29,7 +29,6 @@ pub async fn waitlist_signup(
         "captured_at": chrono::Utc::now(),
     });
 
-    // Merge UTMs and other frontend-provided meta if they exist
     if let Some(req_meta) = req.metadata.as_mut() {
         if let Some(incoming_obj) = req_meta.as_object_mut() {
             if let Some(final_obj) = meta.as_object_mut() {
@@ -42,12 +41,25 @@ pub async fn waitlist_signup(
     
     req.metadata = Some(meta);
 
-    insert_waitlist_signup(&state.db, req).await.map_err(|e| {
+    let (_id, position, is_new) = insert_waitlist_signup(&state.db, req).await.map_err(|e| {
         tracing::error!("Waitlist signup failed: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
-    Ok(success(&rid, "Signed up successfully".to_string()))
+    let message = if is_new {
+        "Successfully joined waitlist"
+    } else {
+        "You are already on the waitlist!"
+    };
+
+    Ok(Json(SuccessEnvelope {
+        data: json!({
+            "message": message,
+            "position": position,
+            "isNew": is_new
+        }),
+        request_id: rid
+    }))
 }
 
 /// Protected endpoint to list waitlist entries

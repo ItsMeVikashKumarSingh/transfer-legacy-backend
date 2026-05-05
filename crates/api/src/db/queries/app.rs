@@ -164,10 +164,14 @@ pub async fn update_app_content(
 pub async fn insert_waitlist_signup(
     pool: &Pool<Postgres>,
     req: WaitlistSignupRequest,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<(Uuid, i64, bool), sqlx::Error> {
     use sqlx::Row;
+    
+    // 1. Try to insert or update
     let row = sqlx::query(
-        "INSERT INTO app.waitlist (email, name, meta) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET updated_at = now() RETURNING id",
+        "INSERT INTO app.waitlist (email, name, meta) VALUES ($1, $2, $3) 
+         ON CONFLICT (email) DO UPDATE SET updated_at = now() 
+         RETURNING id, created_at, (xmax = 0) AS is_new",
     )
     .bind(req.email)
     .bind(req.name)
@@ -175,7 +179,21 @@ pub async fn insert_waitlist_signup(
     .fetch_one(pool)
     .await?;
 
-    Ok(row.get::<Uuid, _>("id"))
+    let id: Uuid = row.get("id");
+    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+    let is_new: bool = row.get("is_new");
+
+    // 2. Calculate position (count of entries with created_at <= this entry)
+    let pos_row = sqlx::query(
+        "SELECT COUNT(*) FROM app.waitlist WHERE created_at <= $1 AND is_deleted = false",
+    )
+    .bind(created_at)
+    .fetch_one(pool)
+    .await?;
+
+    let position: i64 = pos_row.get(0);
+
+    Ok((id, position, is_new))
 }
 
 pub async fn list_waitlist_entries(pool: &Pool<Postgres>) -> Result<Vec<WaitlistEntry>, sqlx::Error> {
