@@ -157,6 +157,17 @@ pub async fn review_decision(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
+    // Also log to ops activity table for dashboard
+    let _ = crate::db::queries::ops::log_activity(
+        &state.db,
+        None, // System/Dual Op action
+        "manual_review_decision",
+        Some("manual_reviews"),
+        Some(&review_id.to_string()),
+        Some(audit_payload),
+        None
+    ).await;
+
     tx.commit().await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;

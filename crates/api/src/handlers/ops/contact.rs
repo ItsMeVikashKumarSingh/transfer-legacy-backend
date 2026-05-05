@@ -4,6 +4,7 @@ use tower_http::request_id::RequestId;
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::db::queries::app as app_queries;
+use crate::db::queries::ops as ops_queries;
 use crate::handlers::ops::auth_utils::Claims;
 use transfer_legacy_shared_types::models::app::{ContactConfig, ContactMessage};
 
@@ -31,6 +32,18 @@ pub async fn update_contact_handler(
         tracing::error!("Failed to update contact config: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    // Log activity
+    let _ = ops_queries::log_activity(
+        &state.db,
+        Some(_claims.sub),
+        "update_contact_config",
+        Some("contact_config"),
+        Some("1"),
+        None,
+        None
+    ).await;
+
     Ok(Json(serde_json::json!({ "status": "updated" })))
 }
 
@@ -58,5 +71,16 @@ pub async fn delete_contact_message_handler(
         tracing::error!("Failed to delete contact message: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    // Log activity
+    let _ = ops_queries::log_activity(
+        &state.db,
+        Some(_claims.sub),
+        "delete_contact_message",
+        Some("contact_messages"),
+        Some(&message_id.to_string()),
+        None,
+        None
+    ).await;
     Ok(Json(serde_json::json!({ "status": "deleted" })))
 }
