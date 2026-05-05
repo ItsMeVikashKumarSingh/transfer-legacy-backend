@@ -8,6 +8,7 @@ use crate::handlers::ops::auth_utils::{self, Claims};
 use transfer_legacy_shared_types::models::ops::{
     OpsAdmin, OpsRole, OpsCreateAdminRequest, OpsUpdateAdminRequest
 };
+use crate::notifications::resend::{send_notification, NotificationTemplate};
 
 pub async fn list_admins_handler(
     State(state): State<AppState>,
@@ -50,6 +51,21 @@ pub async fn create_admin_handler(
         Some(serde_json::json!({ "email": payload.email })), 
         None
     ).await.ok();
+
+    // Send welcome email with credentials
+    let config = state.config.clone();
+    let email = payload.email.clone();
+    let password = payload.password.clone();
+
+    tokio::spawn(async move {
+        if let Err(e) = send_notification(
+            &config,
+            &email,
+            NotificationTemplate::AdminCreated { email, password }
+        ).await {
+            tracing::error!("Failed to send admin welcome email: {:?}", e);
+        }
+    });
 
     Ok(Json(id))
 }

@@ -71,6 +71,10 @@ pub async fn send_email(
             "Action Required: Your Legacy is Ready for Release",
             "Transfer Legacy <support@transferlegacy.com>",
         ),
+        n if n.contains("waitlist_welcome") => (
+            "Welcome to the Transfer Legacy Waitlist!",
+            "Transfer Legacy <waitlist@transferlegacy.com>",
+        ),
         _ => (
             "Notification from Transfer Legacy",
             "Transfer Legacy <no-reply@transferlegacy.com>",

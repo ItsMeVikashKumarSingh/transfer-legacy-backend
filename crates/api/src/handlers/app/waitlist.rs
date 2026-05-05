@@ -8,6 +8,7 @@ use crate::db::queries::app::{insert_waitlist_signup, list_waitlist_entries};
 use crate::errors::{ApiError, success, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadResponse};
 use crate::state::AppState;
+use crate::notifications::resend::NotificationTemplate;
 use transfer_legacy_shared_types::models::app::WaitlistSignupRequest;
 
 /// Public endpoint for waitlist signup
@@ -45,6 +46,18 @@ pub async fn waitlist_signup(
         tracing::error!("Waitlist signup failed: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    if is_new {
+        // Enqueue welcome email
+        let _ = state.notify(
+            uuid::Uuid::nil(),
+            &req.email,
+            NotificationTemplate::WaitlistWelcome {
+                owner_name: req.name.clone().unwrap_or_else(|| "there".to_string()),
+                position,
+            }
+        ).await;
+    }
 
     let message = if is_new {
         "Successfully joined waitlist"

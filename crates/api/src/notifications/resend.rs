@@ -62,6 +62,14 @@ pub enum NotificationTemplate {
         diff_html: String,
         audit_details: String,
     },
+    AdminCreated {
+        email: String,
+        password: String,
+    },
+    WaitlistWelcome {
+        owner_name: String,
+        position: i64,
+    },
 }
 
 impl NotificationTemplate {
@@ -79,6 +87,8 @@ impl NotificationTemplate {
             Self::ConflictHold { .. } => "Security Notice: Inheritance Conflict Hold",
             Self::ReleaseReady { .. } => "Action Required: Your Legacy is Ready for Release",
             Self::SecurityAlert { .. } => "Security Alert: Platform Configuration Changed",
+            Self::AdminCreated { .. } => "Administrator Access Granted",
+            Self::WaitlistWelcome { .. } => "Welcome to the Transfer Legacy Waitlist!",
         }
     }
 
@@ -92,6 +102,8 @@ impl NotificationTemplate {
             Self::ConflictHold { .. } => "conflict_hold_notice".into(),
             Self::ReleaseReady { .. } => "release_ready".into(),
             Self::SecurityAlert { .. } => "security_alert".into(),
+            Self::AdminCreated { .. } => "admin_created".into(),
+            Self::WaitlistWelcome { .. } => "waitlist_welcome".into(),
         }
     }
 
@@ -102,7 +114,9 @@ impl NotificationTemplate {
             | Self::AttestationRequest { .. }
             | Self::ConflictHold { .. }
             | Self::ReleaseReady { .. } => "Transfer Legacy <support@transferlegacy.com>",
-            _ => "Transfer Legacy <no-reply@transferlegacy.com>",
+            | Self::SecurityAlert { .. } => "Transfer Legacy <security@transferlegacy.com>",
+            Self::AdminCreated { .. } => "Transfer Legacy Control <security@transferlegacy.com>",
+            Self::WaitlistWelcome { .. } => "Transfer Legacy <waitlist@transferlegacy.com>",
         }
     }
 }
@@ -211,10 +225,21 @@ pub async fn send_notification(
             params.insert("diff_html", diff_html.clone());
             params.insert("audit_details", audit_details.clone());
         }
+        NotificationTemplate::AdminCreated { email, password } => {
+            params.insert("admin_email", email.clone());
+            params.insert("admin_password", password.clone());
+        }
+        NotificationTemplate::WaitlistWelcome { owner_name, position } => {
+            params.insert("owner_name", owner_name.clone());
+            params.insert("position", position.to_string());
+        }
     }
 
+    let mut root = HashMap::new();
+    root.insert("params", params);
+
     let rendered_html = hb
-        .render_template(&html_content, &params)
+        .render_template(&html_content, &root)
         .map_err(|e| ResendError::Template(format!("Failed to render template: {}", e)))?;
 
     let client = Client::new();
