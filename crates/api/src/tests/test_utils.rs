@@ -53,14 +53,31 @@ pub async fn spawn_app() -> TestContext {
         }
     }
 
+    let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
+        let key = config.server_private_key_b64.as_deref().unwrap_or_default();
+        let s = crate::services::signing::InMemorySigner::new(key).expect("Test signer setup failed");
+        Arc::new(s)
+    } else {
+        let s = crate::services::signing::OpenBaoSigner::new(
+            config.openbao_addr.clone(),
+            config.openbao_token.clone(),
+        );
+        Arc::new(s)
+    };
+
+    let redis_client = redis::Client::open(config.redis_url.as_str()).unwrap();
+    let redis_conn = redis_client.get_multiplexed_async_connection().await.unwrap();
+
     let state = AppState {
         config: Arc::new(RwLock::new(config.clone())),
         db: pool.clone(),
-        redis: redis::Client::open(config.redis_url.as_str()).unwrap(),
+        redis: redis_client,
+        redis_conn,
         opaque_setup: transfer_legacy_crypto_core::opaque::server_setup_from_b64(
             &config.opaque_server_setup_b64,
         )
         .expect("Mock OPAQUE fail"),
+        signer,
     };
 
     let app = crate::router::create_router(&config, state.clone());

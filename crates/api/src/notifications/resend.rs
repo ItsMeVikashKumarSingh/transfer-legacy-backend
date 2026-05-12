@@ -92,7 +92,7 @@ impl NotificationTemplate {
         }
     }
 
-    fn template_name(&self) -> String {
+    pub fn template_name(&self) -> String {
         match self {
             Self::Invite { .. } => "invite".into(),
             Self::PasswordReset { .. } => "password_reset".into(),
@@ -113,8 +113,10 @@ impl NotificationTemplate {
             | Self::ClaimAvailable { .. }
             | Self::AttestationRequest { .. }
             | Self::ConflictHold { .. }
-            | Self::ReleaseReady { .. } => "Transfer Legacy <support@transferlegacy.com>",
-            | Self::SecurityAlert { .. } => "Transfer Legacy <security@transferlegacy.com>",
+            | Self::ReleaseReady { .. }
+            | Self::PasswordReset { .. }
+            | Self::OwnerReminder { .. } => "Transfer Legacy <support@transferlegacy.com>",
+            Self::SecurityAlert { .. } => "Transfer Legacy <security@transferlegacy.com>",
             Self::AdminCreated { .. } => "Transfer Legacy Control <security@transferlegacy.com>",
             Self::WaitlistWelcome { .. } => "Transfer Legacy <waitlist@transferlegacy.com>",
         }

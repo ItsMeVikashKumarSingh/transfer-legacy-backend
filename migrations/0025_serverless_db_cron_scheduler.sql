@@ -1,0 +1,76 @@
+-- Migration: 0025_serverless_db_cron_scheduler.sql
+-- Description: Configures pg_cron and pg_net extensions inside Supabase Postgres to trigger stateless REST endpoints on Vercel.
+
+-- 1. Enable pg_cron and pg_net extensions if not already present
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- 2. Create helper functions or config table if needed to store secrets securely (optional)
+-- For maximum flexibility, the actual Vercel URL and Authorization Token can be updated in cron.schedule.
+-- We provide a clear pattern below for the developer to run in their production database.
+
+-- Note: In a production Supabase instance, ensure the database has permission to make outgoing HTTP requests.
+-- Replace 'https://your-vercel-domain.vercel.app' and 'YOUR_CRON_SECRET' with actual values.
+
+/*
+-- Schedule Heartbeat Evaluation (Every Hour)
+SELECT cron.schedule(
+  'tl-heartbeat-eval',
+  '0 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://your-vercel-domain.vercel.app/v1/jobs/heartbeat-eval',
+    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+  );
+  $$
+);
+
+-- Schedule Audit Anchor (Daily at 00:05 UTC)
+SELECT cron.schedule(
+  'tl-audit-anchor',
+  '5 0 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://your-vercel-domain.vercel.app/v1/jobs/audit-anchor',
+    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+-- Schedule Release Evaluation (Every 30 Minutes)
+SELECT cron.schedule(
+  'tl-release-eval',
+  '*/30 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://your-vercel-domain.vercel.app/v1/jobs/release-eval',
+    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+  );
+  $$
+);
+
+-- Schedule Conflict Check (Every 30 Minutes)
+SELECT cron.schedule(
+  'tl-conflict-check',
+  '*/30 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://your-vercel-domain.vercel.app/v1/jobs/conflict-check',
+    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+  );
+  $$
+);
+
+-- Schedule Release Delivery (Every 30 Minutes)
+SELECT cron.schedule(
+  'tl-release-delivery',
+  '*/30 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://your-vercel-domain.vercel.app/v1/jobs/release-delivery',
+    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+  );
+  $$
+);
+*/

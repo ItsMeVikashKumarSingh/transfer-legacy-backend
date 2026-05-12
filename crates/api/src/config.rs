@@ -65,6 +65,9 @@ pub struct Config {
     pub owner_email: String,
     pub ops_admin_email: String,
     pub ops_admin_password: String,
+    pub tl_serverless: bool,
+    pub server_private_key_b64: Option<String>,
+    pub tl_cron_secret: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -131,6 +134,11 @@ pub struct OpenBaoSecrets {
 
 impl Config {
     pub async fn load() -> Result<Self, ConfigError> {
+        if env::var("TL_SERVERLESS").unwrap_or_default() == "true" {
+            tracing::info!("Bypassing OpenBao: TL_SERVERLESS is set to true. Loading from environment.");
+            return Self::from_env();
+        }
+
         // 1. Gather Bootstrap Env Vars
         let bind_addr = env::var("TL_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0".to_string());
         let port_str = env::var("TL_PORT").unwrap_or_else(|_| "8080".to_string());
@@ -243,6 +251,9 @@ impl Config {
             owner_email: s.owner_email.trim().to_string(),
             ops_admin_email: s.ops_admin_email.unwrap_or_else(|| "admin@transferlegacy.com".to_string()).trim().to_string(),
             ops_admin_password: s.ops_admin_password.unwrap_or_default().trim().to_string(),
+            tl_serverless: false,
+            server_private_key_b64: None,
+            tl_cron_secret: std::env::var("TL_CRON_SECRET").ok().map(|s| s.trim().to_string()),
         })
     }
 
@@ -269,7 +280,13 @@ impl Config {
             .trim()
             .to_string();
 
-        tracing::info!("Config loaded from Env. AEAD Key Hash: {}", hash_value(&aead_key));
+        let tl_serverless = env::var("TL_SERVERLESS").unwrap_or_default() == "true";
+        let server_private_key_b64 = env::var("TL_SERVER_PRIVATE_KEY_B64")
+            .or_else(|_| env::var("SERVER_PRIVATE_KEY_B64"))
+            .ok()
+            .map(|k| k.trim().to_string());
+
+        tracing::info!("Config loaded from Env. AEAD Key Hash: {}, TL_SERVERLESS: {}", hash_value(&aead_key), tl_serverless);
 
         Ok(Self {
             environment,
@@ -333,6 +350,9 @@ impl Config {
             owner_email: env::var("OWNER_EMAIL").unwrap_or_default().trim().to_string(),
             ops_admin_email: env::var("OPS_ADMIN_EMAIL").unwrap_or_else(|_| "admin@transferlegacy.com".to_string()).trim().to_string(),
             ops_admin_password: env::var("OPS_ADMIN_PASSWORD").unwrap_or_default().trim().to_string(),
+            tl_serverless,
+            server_private_key_b64,
+            tl_cron_secret: env::var("TL_CRON_SECRET").ok().map(|s| s.trim().to_string()),
         })
     }
 

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "crates/api/Cargo.toml",
+      "use": "@vercel/rust"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "crates/api/Cargo.toml"
+    }
+  ]
+}

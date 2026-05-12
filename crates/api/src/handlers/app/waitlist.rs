@@ -41,6 +41,8 @@ pub async fn waitlist_signup(
     }
     
     req.metadata = Some(meta);
+    let name_opt = req.name.clone();
+    let email = req.email.clone();
 
     let (_id, position, is_new) = insert_waitlist_signup(&state.db, req).await.map_err(|e| {
         tracing::error!("Waitlist signup failed: {:?}", e);
@@ -51,9 +53,9 @@ pub async fn waitlist_signup(
         // Enqueue welcome email
         let _ = state.notify(
             uuid::Uuid::nil(),
-            &req.email,
+            &email,
             NotificationTemplate::WaitlistWelcome {
-                owner_name: req.name.clone().unwrap_or_else(|| "there".to_string()),
+                owner_name: name_opt.unwrap_or_else(|| "there".to_string()),
                 position,
             }
         ).await;

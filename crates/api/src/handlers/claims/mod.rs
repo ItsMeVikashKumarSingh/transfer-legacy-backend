@@ -585,7 +585,7 @@ pub async fn create_release_record(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
     })?;
     let payload_hash = sha256(&payload_bytes);
-    let signature = openbao::sign_digest(&config, "tl-signing", &payload_hash)
+    let signature = state.signer.sign_digest("tl-signing", &payload_hash)
         .await
         .map_err(|_| {
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)

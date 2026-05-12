@@ -38,12 +38,12 @@ metrics-exporter-prometheus = "0.15"
 dotenvy = "0.15"
 anyhow = "1"
 argon2 = "0.5"
+ed25519-dalek = "2"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }
 
 [dev-dependencies]
 walkdir = "2"
-ed25519-dalek = "2"
 opaque-ke = { version = "4", features = ["serde"] }
 axum-test = "16.1.1" # Modern test client for Axum 0.7

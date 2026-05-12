@@ -53,7 +53,7 @@ pub async fn create_admin_handler(
     ).await.ok();
 
     // Send welcome email with credentials
-    let config = state.config.clone();
+    let config = state.config().await;
     let email = payload.email.clone();
     let password = payload.password.clone();
 
@@ -61,7 +61,7 @@ pub async fn create_admin_handler(
         if let Err(e) = send_notification(
             &config,
             &email,
-            NotificationTemplate::AdminCreated { email, password }
+            NotificationTemplate::AdminCreated { email: email.clone(), password }
         ).await {
             tracing::error!("Failed to send admin welcome email: {:?}", e);
         }

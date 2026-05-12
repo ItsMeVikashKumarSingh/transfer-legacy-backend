@@ -10,6 +10,7 @@ pub mod inheritance;
 pub mod metrics;
 pub mod openapi;
 pub mod ops;
+pub mod jobs;
 pub mod vault;
 
 pub use capabilities::capabilities;

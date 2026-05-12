@@ -60,7 +60,9 @@ pub async fn register_init(
     AeadJson(payload): AeadJson<RegisterInitRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    
     require_idempotency(&state, &headers).await?;
+    
     let rate_key = format!("register_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10).await?;
 
@@ -82,13 +84,8 @@ pub async fn register_init(
         user_id: payload.user_id,
         credential_identifier,
     };
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
+
     let key = format!("opaque:reg:{}", session_id);
     let value = serde_json::to_string(&session).map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)

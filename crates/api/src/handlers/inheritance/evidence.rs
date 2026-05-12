@@ -128,7 +128,7 @@ pub async fn create_evidence_package(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
     })?;
     let digest = sha256(&evidence_bytes);
-    let signature = openbao::sign_digest(&config, "tl-signing", &digest)
+    let signature = state.signer.sign_digest("tl-signing", &digest)
         .await
         .map_err(|_| {
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)

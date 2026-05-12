@@ -202,6 +202,9 @@ mod tests {
             owner_email: "vikashbro111@gmail.com".to_string(),
             ops_admin_email: "admin@transferlegacy.com".to_string(),
             ops_admin_password: "Admin@123".to_string(),
+            tl_serverless: false,
+            server_private_key_b64: None,
+            tl_cron_secret: None,
         };
 
         let test_email = "vikashbro111@gmail.com";
@@ -227,5 +230,53 @@ mod tests {
         println!(
             "⭐ ALL SYSTEMS FUNCTIONAL: OPAQUE Handshake, core persistence, and Resend verified."
         );
+    }
+
+    #[tokio::test]
+    async fn test_redis_connection() {
+        let client = redis::Client::open("redis://127.0.0.1:6379").unwrap();
+        match client.get_multiplexed_async_connection().await {
+            Ok(_) => println!("RECONNECT SUCCESSFUL"),
+            Err(e) => panic!("RECONNECT FAILED: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_item_db() {
+        dotenvy::from_filename(".env.local").ok();
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&db_url).await.unwrap();
+        let user_id = Uuid::new_v4();
+        let item_id = Uuid::new_v4();
+        let ciphertext = b"test".to_vec();
+        sqlx::query("INSERT INTO auth.users (id, email) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(format!("test_del_{}@example.com", user_id))
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO core.items (item_id, user_id, ciphertext, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5)"
+        )
+        .bind(item_id)
+        .bind(user_id)
+        .bind(&ciphertext)
+        .bind("v1")
+        .bind(1)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        match sqlx::query(
+            "UPDATE core.items SET is_deleted = true, deleted_at = now() WHERE user_id = $1 AND item_id = $2",
+        )
+        .bind(user_id)
+        .bind(item_id)
+        .execute(&pool)
+        .await {
+            Ok(_) => println!("DELETE ITEM SQL SUCCESSFUL"),
+            Err(e) => panic!("DELETE ITEM SQL FAILED: {:?}", e),
+        }
     }
 }

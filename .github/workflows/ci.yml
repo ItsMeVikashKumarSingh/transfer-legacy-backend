@@ -16,6 +16,7 @@ jobs:
             runner: ubuntu-latest
           - arch: arm64
             runner: ubuntu-24.04-arm
+        mode: [serverless, enterprise]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -24,21 +25,32 @@ jobs:
           toolchain: 1.91.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Architecture
-        run: |
-          echo "tier=1 arch=${{ matrix.arch }}"
-          uname -a
       - name: Format
+        if: matrix.mode == 'serverless'
         run: cargo fmt --check
       - name: Clippy
+        if: matrix.mode == 'serverless'
         run: cargo clippy --all-targets -- -D warnings
-      - name: Tests
+      - name: Tests (Serverless Mode)
+        if: matrix.mode == 'serverless'
+        env:
+          TL_SERVERLESS: "true"
+          TL_SERVER_PRIVATE_KEY_B64: "MC4CAQAwBQYDK2VwBCIEIPm3M6y+3v9f0v8j8l8k8l8k8l8k8l8k8l8k8l8k8l8k"
+        run: cargo test --workspace --all-targets
+      - name: Tests (Enterprise Mode)
+        if: matrix.mode == 'enterprise'
+        env:
+          TL_SERVERLESS: "false"
         run: cargo test --workspace --all-targets
       - uses: taiki-e/install-action@cargo-deny
+        if: matrix.mode == 'serverless'
       - uses: taiki-e/install-action@cargo-audit
+        if: matrix.mode == 'serverless'
       - name: Cargo Deny
+        if: matrix.mode == 'serverless'
         run: cargo deny check
       - name: Cargo Audit
+        if: matrix.mode == 'serverless'
         run: cargo audit
 
   tier2-smoke:

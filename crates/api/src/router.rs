@@ -247,6 +247,13 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/login", post(crate::handlers::ops::login_handler))
         .nest("/", protected_ops_routes);
 
+    let jobs_routes = Router::new()
+        .route("/heartbeat-eval", post(crate::handlers::jobs::heartbeat_eval))
+        .route("/audit-anchor", post(crate::handlers::jobs::audit_anchor))
+        .route("/release-eval", post(crate::handlers::jobs::release_eval))
+        .route("/conflict-check", post(crate::handlers::jobs::conflict_check))
+        .route("/release-delivery", post(crate::handlers::jobs::release_delivery));
+
     Router::new()
         .route("/health", get(health))
         .route("/metrics", get(crate::handlers::metrics::metrics))
@@ -265,6 +272,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .nest("/v1/gdpr", gdpr_routes)
         .nest("/v1/app", app_routes)
         .nest("/v1/ops", ops_routes)
+        .nest("/v1/jobs", jobs_routes)
         .with_state(state)
         .layer(from_fn(crate::middleware::metrics::metrics_middleware))
         .layer(middleware_stack)

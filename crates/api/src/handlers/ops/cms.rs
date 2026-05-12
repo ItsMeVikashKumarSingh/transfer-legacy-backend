@@ -50,7 +50,7 @@ pub async fn upsert_page_ops(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     
     page.slug = slug.clone();
-    page.updated_by = Some(claims.email.clone());
+    page.updated_by = Some(claims.sub.to_string());
     
     app_queries::upsert_cms_page(&state.db, page)
         .await

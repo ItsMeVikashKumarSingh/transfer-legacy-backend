@@ -11,7 +11,9 @@ pub struct AppState {
     pub config: Arc<RwLock<Config>>,
     pub db: PgPool,
     pub redis: RedisClient,
+    pub redis_conn: redis::aio::MultiplexedConnection,
     pub opaque_setup: OpaqueServerSetup,
+    pub signer: Arc<dyn crate::services::signing::TransitSigner>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -22,19 +24,37 @@ pub enum StateError {
     Redis(#[from] redis::RedisError),
     #[error("opaque setup error: {0}")]
     Opaque(#[from] OpaqueError),
+    #[error("signer setup error: {0}")]
+    Signer(String),
 }
 
 impl AppState {
     pub async fn new(config: Config) -> Result<Self, StateError> {
         let db = PgPool::connect(&config.database_url).await?;
         let redis = RedisClient::open(config.redis_url.as_str())?;
+        let redis_conn = redis.get_multiplexed_async_connection().await?;
         let opaque_setup = server_setup_from_b64(&config.opaque_server_setup_b64)?;
+
+        let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
+            let key = config.server_private_key_b64.as_deref().unwrap_or_default();
+            let s = crate::services::signing::InMemorySigner::new(key)
+                .map_err(|e| StateError::Signer(e.to_string()))?;
+            Arc::new(s)
+        } else {
+            let s = crate::services::signing::OpenBaoSigner::new(
+                config.openbao_addr.clone(),
+                config.openbao_token.clone(),
+            );
+            Arc::new(s)
+        };
 
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             db,
             redis,
+            redis_conn,
             opaque_setup,
+            signer,
         })
     }
 

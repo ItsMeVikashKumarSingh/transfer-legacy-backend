@@ -142,20 +142,16 @@ async fn enforce_replay(
     seq: u64,
     ts: i64,
 ) -> Result<(), ApiError> {
-    let now = SystemTime::now()
+    let systime_now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| ApiError::app(AppError::ReplayOrSkew))?;
-    let now_ts = now.as_secs() as i64;
+    let now_ts = systime_now.as_secs() as i64;
     if (now_ts - ts).abs() > 300 {
         counter!("aead_failures_total", "reason" => "clock_skew").increment(1);
         return Err(ApiError::app(AppError::ReplayOrSkew));
     }
 
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| ApiError::app(AppError::Internal))?;
+    let mut conn = state.redis_conn.clone();
     let key = format!("seq:{}", device_id);
     let last: Option<u64> = conn
         .get(&key)

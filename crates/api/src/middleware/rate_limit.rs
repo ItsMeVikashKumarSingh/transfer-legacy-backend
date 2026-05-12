@@ -12,11 +12,7 @@ pub async fn require_idempotency(state: &AppState, headers: &HeaderMap) -> Resul
         .map(|s| s.to_string())
         .ok_or_else(|| ApiError::app(AppError::BadRequest))?;
 
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| ApiError::app(AppError::Internal))?;
+    let mut conn = state.redis_conn.clone();
     let redis_key = format!("idem:{}", key);
 
     let set: bool = conn
@@ -39,11 +35,7 @@ pub async fn enforce_rate_limit(
     key: &str,
     max_per_minute: u64,
 ) -> Result<(), ApiError> {
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| ApiError::app(AppError::Internal))?;
+    let mut conn = state.redis_conn.clone();
     let redis_key = format!("rate:{}", key);
     let count: u64 = conn
         .incr(&redis_key, 1)

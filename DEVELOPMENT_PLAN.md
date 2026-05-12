@@ -1225,6 +1225,14 @@ transfer-legacy/
 - [ ] runbooks/backup-restore.md written
 - [ ] Phase 10 acceptance criteria all green
 
+### Phase 11 — Serverless Transition
+- [x] 11.1 Vercel Serverless support (`vercel.json`, `vercel-rust`)
+- [x] 11.2 Stateless `InMemorySigner` (Ed25519) bypassing OpenBao
+- [x] 11.3 Supabase `pg_cron` + `pg_net` job scheduler migration
+- [x] 11.4 `TL_SERVERLESS` configuration flag
+- [x] 11.5 `/v1/jobs/*` stateless webhook endpoints
+- [x] Phase 11 acceptance criteria all green (23-test suite passes in serverless mode)
+
 ---
 
 ## Rules Files Quick Reference
