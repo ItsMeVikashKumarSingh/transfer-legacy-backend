@@ -47,3 +47,12 @@ transfer-legacy-crypto-core = { path = "../crypto-core" }
 walkdir = "2"
 opaque-ke = { version = "4", features = ["serde"] }
 axum-test = "16.1.1" # Modern test client for Axum 0.7
+
+[[bin]]
+name = "transfer-legacy-api"
+path = "src/main.rs"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+

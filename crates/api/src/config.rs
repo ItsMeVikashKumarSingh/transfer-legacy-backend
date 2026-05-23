@@ -262,7 +262,7 @@ impl Config {
         dotenvy::dotenv().ok();
 
         let bind_addr = env::var("TL_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0".to_string());
-        let port_str = env::var("TL_PORT").unwrap_or_else(|_| "8080".to_string());
+        let port_str = env::var("TL_PORT").or_else(|_| env::var("PORT")).unwrap_or_else(|_| "8080".to_string());
         let port = port_str
             .parse::<u16>()
             .map_err(|_| ConfigError::InvalidPort(port_str))?;
