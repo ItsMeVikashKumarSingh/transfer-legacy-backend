@@ -134,8 +134,8 @@ pub struct OpenBaoSecrets {
 
 impl Config {
     pub async fn load() -> Result<Self, ConfigError> {
-        if env::var("TL_SERVERLESS").unwrap_or_default() == "true" {
-            tracing::info!("Bypassing OpenBao: TL_SERVERLESS is set to true. Loading from environment.");
+        if env::var("TL_SERVERLESS").unwrap_or_else(|_| "true".to_string()) != "false" {
+            tracing::info!("Bypassing OpenBao: TL_SERVERLESS is set to true (default). Loading from environment.");
             return Self::from_env();
         }
 
@@ -280,7 +280,7 @@ impl Config {
             .trim()
             .to_string();
 
-        let tl_serverless = env::var("TL_SERVERLESS").unwrap_or_default() == "true";
+        let tl_serverless = env::var("TL_SERVERLESS").unwrap_or_else(|_| "true".to_string()) != "false";
         let server_private_key_b64 = env::var("TL_SERVER_PRIVATE_KEY_B64")
             .or_else(|_| env::var("SERVER_PRIVATE_KEY_B64"))
             .ok()
