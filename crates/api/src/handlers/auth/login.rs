@@ -63,12 +63,14 @@ pub async fn login_init(
     let rate_key = format!("login_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            tracing::error!("enforce_rate_limit failed in login_init: {:?}", e);
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::RateLimited, &rid)
         })?;
     let record = fetch_opaque_record(&state.db, payload.user_id)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            tracing::error!("fetch_opaque_record failed in login_init for user {}: {:?}", payload.user_id, e);
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
         })?;
 
@@ -77,11 +79,13 @@ pub async fn login_init(
         &payload.credential_request,
         &record.opaque_record,
     )
-    .map_err(|_| {
+    .map_err(|e| {
+        tracing::error!("login_start failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
     })?;
 
-    let state_bytes = serialize_login_state(&server_state).map_err(|_| {
+    let state_bytes = serialize_login_state(&server_state).map_err(|e| {
+        tracing::error!("serialize_login_state failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
     let state_b64 = URL_SAFE_NO_PAD.encode(state_bytes);
@@ -96,18 +100,14 @@ pub async fn login_init(
         state_b64,
     };
 
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
     let key = format!("opaque:login:{}", session_id);
-    let value = serde_json::to_string(&session).map_err(|_| {
+    let value = serde_json::to_string(&session).map_err(|e| {
+        tracing::error!("serde_json::to_string failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    let _: () = conn.set_ex(key, value, 300).await.map_err(|_| {
+    let _: () = conn.set_ex(key, value, 300).await.map_err(|e| {
+        tracing::error!("Redis set_ex failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
@@ -133,13 +133,7 @@ pub async fn login_finish(
     let config = state.config().await;
 
     require_idempotency(&state, &headers).await?;
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
     let key = format!("opaque:login:{}", payload.session_id);
     let session_json: Option<String> = conn.get(&key).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
@@ -191,4 +185,39 @@ pub async fn login_finish(
     };
     let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserIdLookupRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserIdLookupResponse {
+    pub user_id: Uuid,
+}
+
+pub async fn lookup_user_id(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Json(payload): Json<UserIdLookupRequest>,
+) -> Result<Json<crate::errors::SuccessEnvelope<UserIdLookupResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let row = sqlx::query_scalar::<_, Uuid>("SELECT id FROM auth.users WHERE email = $1")
+        .bind(&payload.email)
+        .fetch_optional(state.db())
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error looking up user ID: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
+    let user_id = row.ok_or_else(|| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+    })?;
+
+    Ok(Json(crate::errors::SuccessEnvelope {
+        data: UserIdLookupResponse { user_id },
+        request_id: rid,
+    }))
 }

@@ -13,8 +13,6 @@ async fn test_full_auth_lifecycle() {
 
     let user_id = Uuid::new_v4();
     let email = format!("test-{}@example.com", user_id);
-    crate::tests::test_utils::create_test_user(&ctx.db, user_id, &email).await;
-
     let password = "Password123!";
 
     // --- 1. Registration Init ---
@@ -22,7 +20,7 @@ async fn test_full_auth_lifecycle() {
     let reg_init_req = RegisterInitRequest {
         user_id,
         registration_request: reg_req,
-        credential_identifier: None,
+        credential_identifier: Some(email.clone()),
     };
 
     let reg_init_res: RegisterInitResponse = client

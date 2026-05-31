@@ -7,6 +7,8 @@ use crate::config::Config;
 pub enum SupabaseError {
     #[error("http error")]
     Http,
+    #[error("user already exists")]
+    UserAlreadyExists,
     #[error("unexpected response")]
     Unexpected,
 }
@@ -147,6 +149,70 @@ pub async fn generate_recovery_link(config: &Config, email: &str) -> Result<Stri
             .ok_or(SupabaseError::Unexpected)?;
         Ok(link.to_string())
     } else {
+        Err(SupabaseError::Unexpected)
+    }
+}
+
+pub async fn register_user_in_supabase(
+    config: &Config,
+    user_id: uuid::Uuid,
+    email: &str,
+) -> Result<(), SupabaseError> {
+    let client = Client::new();
+    let url = format!("{}/auth/v1/admin/users", config.supabase_url);
+    let res = client
+        .post(url)
+        .header("apikey", config.supabase_secret_key.as_str())
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.supabase_secret_key),
+        )
+        .json(&serde_json::json!({
+            "id": user_id.to_string(),
+            "email": email,
+            "email_confirm": true
+        }))
+        .send()
+        .await
+        .map_err(|_| SupabaseError::Http)?;
+
+    let status = res.status();
+    if status.is_success() || status == reqwest::StatusCode::CONFLICT || status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+        Ok(())
+    } else {
+        let body = res.text().await.unwrap_or_default();
+        if body.contains("23505") || body.contains("duplicate key") || body.contains("already exists") {
+            Err(SupabaseError::UserAlreadyExists)
+        } else {
+            tracing::error!("Supabase Admin user creation failed: status={}, body={}", status, body);
+            Err(SupabaseError::Unexpected)
+        }
+    }
+}
+
+pub async fn delete_user_in_supabase(
+    config: &Config,
+    user_id: uuid::Uuid,
+) -> Result<(), SupabaseError> {
+    let client = Client::new();
+    let url = format!("{}/auth/v1/admin/users/{}", config.supabase_url, user_id);
+    let res = client
+        .delete(url)
+        .header("apikey", config.supabase_secret_key.as_str())
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.supabase_secret_key),
+        )
+        .send()
+        .await
+        .map_err(|_| SupabaseError::Http)?;
+
+    let status = res.status();
+    if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
+        Ok(())
+    } else {
+        let err_body = res.text().await.unwrap_or_default();
+        tracing::error!("Supabase Admin user deletion failed: status={}, body={}", status, err_body);
         Err(SupabaseError::Unexpected)
     }
 }

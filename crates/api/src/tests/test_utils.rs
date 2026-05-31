@@ -66,7 +66,7 @@ pub async fn spawn_app() -> TestContext {
     };
 
     let redis_client = redis::Client::open(config.redis_url.as_str()).unwrap();
-    let redis_conn = redis_client.get_multiplexed_async_connection().await.unwrap();
+    let redis_conn = redis_client.get_connection_manager().await.unwrap();
 
     let state = AppState {
         config: Arc::new(RwLock::new(config.clone())),

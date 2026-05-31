@@ -62,13 +62,7 @@ pub async fn register_start(
     })
     .to_string();
 
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
     let _: () = conn.set_ex(key, value, 300).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
@@ -176,13 +170,7 @@ pub async fn authenticate_start(
     })
     .to_string();
 
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
     let _: () = conn.set_ex(key, value, 300).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
@@ -272,13 +260,7 @@ async fn consume_and_validate_challenge(
     user_id: Uuid,
 ) -> Result<String, ApiError> {
     let key = format!("{}:{}", scope, challenge_id);
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
     let raw: Option<String> = conn.get(key.as_str()).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, rid)
     })?;

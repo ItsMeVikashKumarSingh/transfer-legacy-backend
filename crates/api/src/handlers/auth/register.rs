@@ -68,7 +68,56 @@ pub async fn register_init(
 
     let credential_identifier = payload
         .credential_identifier
+        .clone()
         .unwrap_or_else(|| payload.user_id.to_string());
+
+    let config = state.config().await;
+
+    // Check if the user email already exists in auth.users
+    let existing_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM auth.users WHERE email = $1")
+        .bind(&credential_identifier)
+        .fetch_optional(state.db())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check existing email in auth.users: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
+    if let Some(old_uid) = existing_id {
+        // Check if a completed OPAQUE record exists for this user ID
+        let has_opaque: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM auth_ext.opaque_records WHERE user_id = $1)")
+            .bind(old_uid)
+            .fetch_one(state.db())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to check existing opaque record: {:?}", e);
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            })?;
+
+        if has_opaque {
+            // Already registered!
+            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid));
+        } else {
+            // Incomplete registration, delete the old incomplete user in Supabase Auth Admin API
+            crate::services::supabase::delete_user_in_supabase(&config, old_uid).await.map_err(|e| {
+                tracing::error!("Failed to delete incomplete registration in Supabase: {:?}", e);
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            })?;
+        }
+    }
+
+    // Now insert the new user record safely via Supabase Auth Admin API to satisfy foreign key constraints
+    crate::services::supabase::register_user_in_supabase(&config, payload.user_id, &credential_identifier).await.map_err(|e| {
+        match e {
+            crate::services::supabase::SupabaseError::UserAlreadyExists => {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+            }
+            _ => {
+                tracing::error!("Failed to create user in Supabase: {:?}", e);
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            }
+        }
+    })?;
 
     let (registration_response, _req) =
         registration_start(&state.opaque_setup, &payload.registration_request).map_err(|_| {
@@ -87,12 +136,25 @@ pub async fn register_init(
     let mut conn = state.redis_conn.clone();
 
     let key = format!("opaque:reg:{}", session_id);
-    let value = serde_json::to_string(&session).map_err(|_| {
+    let value = serde_json::to_string(&session).map_err(|e| {
+        tracing::error!("register_init: Failed to serialize OPAQUE session: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    let _: () = conn.set_ex(key, value, 300).await.map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    
+    // SET_EX with 1 retry to handle idle connection drops gracefully
+    let set_res: Result<(), redis::RedisError> = conn.set_ex(&key, value.clone(), 300).await;
+    let _: () = match set_res {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            tracing::warn!("register_init: Redis set_ex failed, retrying once. Error: {:?}", e);
+            let mut retry_conn = state.redis_conn.clone();
+            let retry_res: Result<(), redis::RedisError> = retry_conn.set_ex(&key, value, 300).await;
+            retry_res.map_err(|err| {
+                tracing::error!("register_init: Redis set_ex retry failed for key '{}': {:?}", key, err);
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            })
+        }
+    }?;
 
     let envelope = SuccessEnvelope {
         data: RegisterInitResponse {
@@ -116,13 +178,7 @@ pub async fn register_finish(
     let config = state.config().await;
 
     require_idempotency(&state, &headers).await?;
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let mut conn = state.redis_conn.clone();
     let key = format!("opaque:reg:{}", payload.session_id);
     let session_json: Option<String> = conn.get(&key).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)

@@ -234,8 +234,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_connection() {
-        let client = redis::Client::open("redis://127.0.0.1:6379").unwrap();
-        match client.get_multiplexed_async_connection().await {
+        dotenvy::from_filename(".env.local").ok();
+        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let client = redis::Client::open(redis_url).unwrap();
+        match client.get_async_connection().await {
             Ok(_) => println!("RECONNECT SUCCESSFUL"),
             Err(e) => panic!("RECONNECT FAILED: {:?}", e),
         }

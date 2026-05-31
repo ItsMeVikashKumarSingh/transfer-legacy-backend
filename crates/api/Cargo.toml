@@ -17,7 +17,7 @@ tower-http = { version = "0.5", features = ["trace", "timeout", "request-id", "c
 uuid = { version = "1", features = ["v4", "serde"] }
 hyper = "1"
 sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json"] }
-redis = { version = "0.25", features = ["tokio-comp"] }
+redis = { version = "0.25", features = ["tokio-comp", "tokio-rustls-comp", "connection-manager"] }
 base64 = "0.22"
 bytes = "1"
 async-trait = "0.1"
@@ -52,7 +52,4 @@ axum-test = "16.1.1" # Modern test client for Axum 0.7
 name = "transfer-legacy-api"
 path = "src/main.rs"
 
-[[bin]]
-name = "main"
-path = "src/main.rs"
 

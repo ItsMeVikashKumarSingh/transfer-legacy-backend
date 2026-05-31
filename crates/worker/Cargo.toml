@@ -27,7 +27,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 metrics = "0.23"
 dotenvy = "0.15"
 nix = { version = "0.29", features = ["mman"] }
-redis = "0.25"
+redis = { version = "0.25", features = ["tokio-comp", "tokio-rustls-comp"] }
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }

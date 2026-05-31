@@ -11,7 +11,7 @@ pub struct AppState {
     pub config: Arc<RwLock<Config>>,
     pub db: PgPool,
     pub redis: RedisClient,
-    pub redis_conn: redis::aio::MultiplexedConnection,
+    pub redis_conn: redis::aio::ConnectionManager,
     pub opaque_setup: OpaqueServerSetup,
     pub signer: Arc<dyn crate::services::signing::TransitSigner>,
 }
@@ -30,9 +30,16 @@ pub enum StateError {
 
 impl AppState {
     pub async fn new(config: Config) -> Result<Self, StateError> {
-        let db = PgPool::connect(&config.database_url).await?;
+        let db = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(3)
+            .min_connections(0)
+            .acquire_timeout(std::time::Duration::from_secs(3))
+            .idle_timeout(std::time::Duration::from_secs(30))
+            .connect_lazy(&config.database_url)?;
         let redis = RedisClient::open(config.redis_url.as_str())?;
-        let redis_conn = redis.get_multiplexed_async_connection().await?;
+
+
+        let redis_conn = redis.get_connection_manager().await?;
         let opaque_setup = server_setup_from_b64(&config.opaque_server_setup_b64)?;
 
         let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
@@ -57,6 +64,7 @@ impl AppState {
             signer,
         })
     }
+
 
     /// Pull a cloned snapshot of the current config.
     pub async fn config(&self) -> Config {

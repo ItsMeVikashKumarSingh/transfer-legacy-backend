@@ -83,10 +83,16 @@ pub fn wrap_response<T: Serialize>(
     value: &T,
 ) -> Result<AeadResponse, ApiError> {
     let key = decode_key(&config.server_aead_key_b64)?;
-    let plaintext = serde_json::to_vec(value).map_err(|_| ApiError::app(AppError::Internal))?;
+    let plaintext = serde_json::to_vec(value).map_err(|e| {
+        tracing::error!("wrap_response: Failed to serialize response: {:?}", e);
+        ApiError::app(AppError::Internal)
+    })?;
     let aad = aad_from_headers(headers);
     let CoreAeadEnvelope { nonce, ciphertext } =
-        encrypt(&key, &plaintext, &aad).map_err(|_| ApiError::app(AppError::Internal))?;
+        encrypt(&key, &plaintext, &aad).map_err(|e| {
+            tracing::error!("wrap_response: Failed to encrypt response: {:?}", e);
+            ApiError::app(AppError::Internal)
+        })?;
 
     Ok(AeadResponse {
         nonce: URL_SAFE_NO_PAD.encode(nonce),
@@ -97,7 +103,10 @@ pub fn wrap_response<T: Serialize>(
 fn decode_key(key_b64: &str) -> Result<Vec<u8>, ApiError> {
     URL_SAFE_NO_PAD
         .decode(key_b64.trim())
-        .map_err(|_| ApiError::app(AppError::Internal))
+        .map_err(|e| {
+            tracing::error!("decode_key: Base64 decoding failed for key_b64: {:?}", e);
+            ApiError::app(AppError::Internal)
+        })
 }
 
 fn aad_from_headers(headers: &HeaderMap) -> Vec<u8> {
@@ -144,32 +153,61 @@ async fn enforce_replay(
 ) -> Result<(), ApiError> {
     let systime_now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| ApiError::app(AppError::ReplayOrSkew))?;
+        .map_err(|e| {
+            tracing::error!("enforce_replay: System time calculation error: {:?}", e);
+            ApiError::app(AppError::ReplayOrSkew)
+        })?;
     let now_ts = systime_now.as_secs() as i64;
     if (now_ts - ts).abs() > 300 {
+        tracing::error!("enforce_replay: Clock skew detected. Now: {}, received ts: {}, diff: {}", now_ts, ts, (now_ts - ts).abs());
         counter!("aead_failures_total", "reason" => "clock_skew").increment(1);
         return Err(ApiError::app(AppError::ReplayOrSkew));
     }
 
     let mut conn = state.redis_conn.clone();
     let key = format!("seq:{}", device_id);
-    let last: Option<u64> = conn
-        .get(&key)
-        .await
-        .map_err(|_| ApiError::app(AppError::Internal))?;
+
+    // GET with 1 retry to handle idle connection drops gracefully
+    let last: Option<u64> = match conn.get(&key).await {
+        Ok(val) => Ok(val),
+        Err(e) => {
+            tracing::warn!("enforce_replay: Redis GET failed, retrying once. Error: {:?}", e);
+            let mut retry_conn = state.redis_conn.clone();
+            retry_conn.get(&key).await.map_err(|err| {
+                tracing::error!("enforce_replay: Redis GET retry failed for key '{}': {:?}", key, err);
+                ApiError::app(AppError::Internal)
+            })
+        }
+    }?;
 
     if let Some(last_seq) = last {
         if seq <= last_seq {
-            counter!("nonce_reuse_detected_total").increment(1);
-            counter!("aead_failures_total", "reason" => "replay").increment(1);
-            return Err(ApiError::app(AppError::ReplayDetected));
+            let config = state.config().await;
+            if config.environment == crate::config::Environment::Local && seq == 1 {
+                tracing::warn!("🔄 Local dev: Client sequence reset detected (seq = 1). Resetting stored sequence.");
+            } else {
+                tracing::error!("enforce_replay: Replay detected. client seq: {}, last stored seq: {}", seq, last_seq);
+                counter!("nonce_reuse_detected_total").increment(1);
+                counter!("aead_failures_total", "reason" => "replay").increment(1);
+                return Err(ApiError::app(AppError::ReplayDetected));
+            }
         }
     }
 
-    let _: () = conn
-        .set_ex(key, seq, 86400)
-        .await
-        .map_err(|_| ApiError::app(AppError::Internal))?;
+    // SET_EX with 1 retry to handle idle connection drops gracefully
+    let set_res: Result<(), redis::RedisError> = conn.set_ex(&key, seq, 86400).await;
+    let _: () = match set_res {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            tracing::warn!("enforce_replay: Redis SET failed, retrying once. Error: {:?}", e);
+            let mut retry_conn = state.redis_conn.clone();
+            let retry_res: Result<(), redis::RedisError> = retry_conn.set_ex(&key, seq, 86400).await;
+            retry_res.map_err(|err| {
+                tracing::error!("enforce_replay: Redis SET retry failed for key '{}': {:?}", key, err);
+                ApiError::app(AppError::Internal)
+            })
+        }
+    }?;
 
     Ok(())
 }

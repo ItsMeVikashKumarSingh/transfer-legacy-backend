@@ -12,65 +12,63 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 -- Note: In a production Supabase instance, ensure the database has permission to make outgoing HTTP requests.
 -- Replace 'https://your-vercel-domain.vercel.app' and 'YOUR_CRON_SECRET' with actual values.
 
-/*
 -- Schedule Heartbeat Evaluation (Every Hour)
-SELECT cron.schedule(
-  'tl-heartbeat-eval',
-  '0 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://your-vercel-domain.vercel.app/v1/jobs/heartbeat-eval',
-    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
-  );
-  $$
-);
-
--- Schedule Audit Anchor (Daily at 00:05 UTC)
-SELECT cron.schedule(
-  'tl-audit-anchor',
-  '5 0 * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://your-vercel-domain.vercel.app/v1/jobs/audit-anchor',
-    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb,
-    body := '{}'::jsonb
-  );
-  $$
-);
-
--- Schedule Release Evaluation (Every 30 Minutes)
-SELECT cron.schedule(
-  'tl-release-eval',
-  '*/30 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://your-vercel-domain.vercel.app/v1/jobs/release-eval',
-    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
-  );
-  $$
-);
-
--- Schedule Conflict Check (Every 30 Minutes)
-SELECT cron.schedule(
-  'tl-conflict-check',
-  '*/30 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://your-vercel-domain.vercel.app/v1/jobs/conflict-check',
-    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
-  );
-  $$
-);
-
--- Schedule Release Delivery (Every 30 Minutes)
-SELECT cron.schedule(
-  'tl-release-delivery',
-  '*/30 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://your-vercel-domain.vercel.app/v1/jobs/release-delivery',
-    headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
-  );
-  $$
-);
-*/
+-- SELECT cron.schedule(
+--   'tl-heartbeat-eval',
+--   '0 * * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://your-vercel-domain.vercel.app/v1/jobs/heartbeat-eval',
+--     headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+--   );
+--   $$
+-- );
+-- 
+-- -- Schedule Audit Anchor (Daily at 00:05 UTC)
+-- SELECT cron.schedule(
+--   'tl-audit-anchor',
+--   '5 0 * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://your-vercel-domain.vercel.app/v1/jobs/audit-anchor',
+--     headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb,
+--     body := '{}'::jsonb
+--   );
+--   $$
+-- );
+-- 
+-- -- Schedule Release Evaluation (Every 30 Minutes)
+-- SELECT cron.schedule(
+--   'tl-release-eval',
+--   '*/30 * * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://your-vercel-domain.vercel.app/v1/jobs/release-eval',
+--     headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+--   );
+--   $$
+-- );
+-- 
+-- -- Schedule Conflict Check (Every 30 Minutes)
+-- SELECT cron.schedule(
+--   'tl-conflict-check',
+--   '*/30 * * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://your-vercel-domain.vercel.app/v1/jobs/conflict-check',
+--     headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+--   );
+--   $$
+-- );
+-- 
+-- -- Schedule Release Delivery (Every 30 Minutes)
+-- SELECT cron.schedule(
+--   'tl-release-delivery',
+--   '*/30 * * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://your-vercel-domain.vercel.app/v1/jobs/release-delivery',
+--     headers := '{"Authorization": "Bearer YOUR_CRON_SECRET", "Content-Type": "application/json"}'::jsonb
+--   );
+--   $$
+-- );

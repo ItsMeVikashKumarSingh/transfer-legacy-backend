@@ -60,14 +60,29 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, app_error, request_id) = match self {
-            ApiError::App(err) => (status_for(&err), err, "unknown".to_string()),
-            ApiError::AppWithRequestId(err, request_id) => (status_for(&err), err, request_id),
-            _ => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                AppError::Internal,
-                "unknown".to_string(),
-            ),
+        let (status, app_error, request_id) = match &self {
+            ApiError::App(err) => {
+                let status = status_for(err);
+                if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!("Internal AppError: {:?}", self);
+                }
+                (status, err.clone(), "unknown".to_string())
+            }
+            ApiError::AppWithRequestId(err, request_id) => {
+                let status = status_for(err);
+                if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!("Internal AppError with request id ({}): {:?}", request_id, self);
+                }
+                (status, err.clone(), request_id.clone())
+            }
+            _ => {
+                tracing::error!("Internal server error: {:?}", self);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    AppError::Internal,
+                    "unknown".to_string(),
+                )
+            }
         };
 
         let body = ErrorEnvelope {
