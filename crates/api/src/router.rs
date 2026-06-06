@@ -191,6 +191,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/waitlist", post(crate::handlers::app::waitlist_signup))
         .route("/pages", get(crate::handlers::app::list_pages))
         .route("/pages/:slug", get(crate::handlers::app::get_page))
+        .route("/contact", get(crate::handlers::app::get_contact_config_handler))
+        .route("/contact/message", post(crate::handlers::app::submit_contact_message_handler))
         .route(
             "/branding",
             put(crate::handlers::app::update_branding_handler)

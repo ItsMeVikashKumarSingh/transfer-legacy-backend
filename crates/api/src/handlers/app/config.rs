@@ -3,11 +3,12 @@ use axum::http::HeaderMap;
 use axum::Json;
 use tower_http::request_id::RequestId;
 
-use crate::db::queries::app::{fetch_branding, update_branding};
+use crate::db::queries::app::{fetch_branding, update_branding, fetch_contact_config, insert_contact_message};
 use crate::errors::{ApiError, success, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadResponse, AeadJson};
 use crate::state::AppState;
-use transfer_legacy_shared_types::models::app::BrandingConfig;
+use transfer_legacy_shared_types::models::app::{BrandingConfig, ContactConfig, ContactMessage};
+use uuid::Uuid;
 
 /// Public endpoint to fetch site branding
 pub async fn get_branding(
@@ -47,3 +48,50 @@ pub async fn update_branding_handler(
     let aead = wrap_response(&config_state, &headers, &envelope)?;
     Ok(Json(aead))
 }
+
+#[derive(serde::Deserialize)]
+pub struct PublicContactMessageRequest {
+    pub name: String,
+    pub email: String,
+    pub subject: Option<String>,
+    pub message: String,
+}
+
+pub async fn get_contact_config_handler(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Result<Json<ContactConfig>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let contact = fetch_contact_config(&state.db).await.map_err(|e| {
+        tracing::error!("Failed to fetch contact config: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+    Ok(Json(contact))
+}
+
+pub async fn submit_contact_message_handler(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Json(payload): Json<PublicContactMessageRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    
+    let msg = ContactMessage {
+        id: Uuid::new_v4(),
+        name: payload.name,
+        email: payload.email,
+        subject: payload.subject,
+        message: payload.message,
+        metadata: None,
+        is_read: false,
+        created_at: chrono::Utc::now(),
+    };
+
+    insert_contact_message(&state.db, msg).await.map_err(|e| {
+        tracing::error!("Failed to save contact message: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    Ok(Json(serde_json::json!({ "status": "message_sent" })))
+}
+
