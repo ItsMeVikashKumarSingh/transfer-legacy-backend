@@ -61,7 +61,16 @@ async fn main() -> Result<(), ApiError> {
             }
         }
     };
-    let state = state::AppState::new(config.clone()).await?;
+    let state = match state::AppState::new(config.clone()).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("ERROR: Failed to initialize application state: {}", e);
+            use std::io::Write;
+            std::io::stdout().flush().ok();
+            std::io::stderr().flush().ok();
+            panic!("CRITICAL: Failed to initialize application state during startup: {}", e);
+        }
+    };
 
     // 2. Setup Hot-Reload Listener (SIGHUP)
     #[cfg(unix)]
