@@ -39,7 +39,18 @@ impl AppState {
         let redis = RedisClient::open(config.redis_url.as_str())?;
 
 
-        let redis_conn = redis.get_connection_manager().await?;
+        let redis_conn = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            redis.get_connection_manager(),
+        )
+        .await
+        .map_err(|_| {
+            redis::RedisError::from((
+                redis::ErrorKind::IoError,
+                "Redis connection timed out during startup (check your REDIS_URL and network access)",
+            ))
+        })??;
+
         let opaque_setup = server_setup_from_b64(&config.opaque_server_setup_b64)?;
 
         let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
