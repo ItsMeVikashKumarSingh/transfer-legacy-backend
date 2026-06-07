@@ -20,18 +20,40 @@ use crate::errors::ApiError;
 
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
-    dotenvy::from_filename(".env.local").ok();
-    dotenvy::dotenv().ok();
+    if let Err(e) = dotenvy::from_filename(".env.local") {
+        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound) {
+            eprintln!("ERROR: Failed to parse .env.local file: {}", e);
+            std::process::exit(1);
+        }
+    }
+    if let Err(e) = dotenvy::dotenv() {
+        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound) {
+            eprintln!("ERROR: Failed to parse .env file: {}", e);
+            std::process::exit(1);
+        }
+    }
     telemetry::init_tracing();
     telemetry::init_metrics();
 
     // 1. Initial Load
     let config = if std::env::var("TL_ENV").unwrap_or_else(|_| "local".to_string()) == "local" {
         tracing::info!("Loading configuration from environment/dotenv...");
-        Config::from_env()?
+        match Config::from_env() {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("ERROR: Configuration error: {}", e);
+                std::process::exit(1);
+            }
+        }
     } else {
         tracing::info!("Loading configuration from OpenBao (Environment: {})...", std::env::var("TL_ENV").unwrap_or_else(|_| "unknown".into()));
-        Config::load().await?
+        match Config::load().await {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("ERROR: Failed to load configuration from OpenBao: {}", e);
+                std::process::exit(1);
+            }
+        }
     };
     let state = state::AppState::new(config.clone()).await?;
 
