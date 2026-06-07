@@ -41,8 +41,11 @@ async fn main() -> Result<(), ApiError> {
         match Config::from_env() {
             Ok(cfg) => cfg,
             Err(e) => {
-                eprintln!("ERROR: Configuration error: {}", e);
-                std::process::exit(1);
+                tracing::error!("ERROR: Configuration error: {}", e);
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+                std::io::stderr().flush().ok();
+                panic!("CRITICAL: Configuration error during startup: {}", e);
             }
         }
     } else {
@@ -50,8 +53,11 @@ async fn main() -> Result<(), ApiError> {
         match Config::load().await {
             Ok(cfg) => cfg,
             Err(e) => {
-                eprintln!("ERROR: Failed to load configuration from OpenBao: {}", e);
-                std::process::exit(1);
+                tracing::error!("ERROR: Failed to load configuration: {}", e);
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+                std::io::stderr().flush().ok();
+                panic!("CRITICAL: Failed to load configuration during startup: {}", e);
             }
         }
     };
