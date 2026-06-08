@@ -133,9 +133,78 @@ async fn main() -> Result<(), ApiError> {
     let bind_addr = format!("{}:{}", config_lock.bind_addr, config_lock.port);
     drop(config_lock); // Release lock before serve
 
-    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    tracing::info!("listening on {bind_addr}");
+    if std::env::var("VERCEL").is_ok() {
+        tracing::info!("🚀 Running under Vercel Serverless Runtime. Handing over to vercel_runtime::run...");
+        
+        let vercel_service = tower::service_fn(move |(_state, req): (vercel_runtime::AppState, hyper::Request<hyper::body::Incoming>)| {
+            let app = app.clone();
+            async move {
+                let req = req.map(axum::body::Body::new);
+                
+                use tower::util::ServiceExt;
+                let response = app.oneshot(req).await.map_err(|e| {
+                    Box::new(e) as vercel_runtime::Error
+                })?;
+                
+                let (parts, body) = response.into_parts();
+                
+                let sync_body = SyncBody::new(body);
+                
+                use http_body_util::BodyExt;
+                let mapped_body = sync_body
+                    .map_err(|err| Box::new(err) as vercel_runtime::Error)
+                    .boxed();
+                
+                let vercel_body = vercel_runtime::ResponseBody(mapped_body);
+                let vercel_response = hyper::Response::from_parts(parts, vercel_body);
+                
+                Ok::<_, vercel_runtime::Error>(vercel_response)
+            }
+        });
 
-    axum::serve(listener, app).await?;
+        vercel_runtime::run(vercel_service).await.map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, format!("Vercel runtime execution error: {}", e))
+        })?;
+    } else {
+        let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+        tracing::info!("listening on {bind_addr}");
+        axum::serve(listener, app).await?;
+    }
     Ok(())
 }
+
+struct SyncBody<B> {
+    inner: std::sync::Mutex<B>,
+}
+
+impl<B> SyncBody<B> {
+    fn new(body: B) -> Self {
+        Self {
+            inner: std::sync::Mutex::new(body),
+        }
+    }
+}
+
+impl<B: http_body::Body + Unpin> http_body::Body for SyncBody<B> {
+    type Data = B::Data;
+    type Error = B::Error;
+
+    fn poll_frame(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, B::Error>>> {
+        let mut guard = self.inner.lock().unwrap();
+        std::pin::Pin::new(&mut *guard).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        let guard = self.inner.lock().unwrap();
+        guard.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        let guard = self.inner.lock().unwrap();
+        guard.size_hint()
+    }
+}
+

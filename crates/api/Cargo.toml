@@ -12,7 +12,7 @@ thiserror = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-tower = "0.4"
+tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["trace", "timeout", "request-id", "cors", "limit", "set-header"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 hyper = "1"
@@ -42,6 +42,9 @@ ed25519-dalek = "2"
 
 transfer-legacy-shared-types = { path = "../shared-types" }
 transfer-legacy-crypto-core = { path = "../crypto-core" }
+vercel_runtime = { version = "2.2.0", features = ["axum"] }
+http-body-util = "0.1"
+http-body = "1.0"
 
 [dev-dependencies]
 walkdir = "2"
