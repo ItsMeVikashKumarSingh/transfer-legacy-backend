@@ -258,6 +258,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/release-delivery", post(crate::handlers::jobs::release_delivery));
 
     Router::new()
+        .route("/", get(|| async { "ok" }))
         .route("/health", get(health))
         .route("/metrics", get(crate::handlers::metrics::metrics))
         .route("/v1/server-capabilities", get(capabilities))

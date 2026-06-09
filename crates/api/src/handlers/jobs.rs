@@ -30,7 +30,7 @@ async fn verify_cron_secret(state: &AppState, headers: &HeaderMap) -> Result<(),
         Some(s) if !s.is_empty() => s,
         _ => {
             // If secret is not configured, deny by default to protect endpoints
-            tracing::error!("❌ TL_CRON_SECRET is not configured on the server!");
+            tracing::error!("TL_CRON_SECRET is not configured on the server!");
             return Err(ApiError::App(AppError::Unauthorized));
         }
     };

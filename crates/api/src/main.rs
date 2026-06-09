@@ -88,7 +88,7 @@ async fn main() -> Result<(), ApiError> {
         };
 
         while stream.recv().await.is_some() {
-            tracing::info!("♻️ SIGHUP received: Reloading configuration from OpenBao...");
+            tracing::info!("SIGHUP received: Reloading configuration from OpenBao...");
             let old_config = state_for_reload.config.read().await.clone();
 
             match Config::load().await {
@@ -101,7 +101,7 @@ async fn main() -> Result<(), ApiError> {
 
                     let mut lock = state_for_reload.config.write().await;
                     *lock = new_config.clone();
-                    tracing::info!("✅ Configuration reloaded successfully.");
+                    tracing::info!("Configuration reloaded successfully.");
 
                     // Send Security Notification
                     if let Err(e) = crate::notifications::resend::send_notification(
@@ -114,11 +114,11 @@ async fn main() -> Result<(), ApiError> {
                     )
                     .await
                     {
-                        tracing::error!("❌ Failed to send security notification: {:?}", e);
+                        tracing::error!("Failed to send security notification: {:?}", e);
                     }
                 }
                 Err(e) => {
-                    tracing::error!("❌ Failed to reload configuration: {}", e);
+                    tracing::error!("Failed to reload configuration: {}", e);
                 }
             }
         }
@@ -134,7 +134,7 @@ async fn main() -> Result<(), ApiError> {
     drop(config_lock); // Release lock before serve
 
     if std::env::var("VERCEL").is_ok() {
-        tracing::info!("🚀 Running under Vercel Serverless Runtime. Handing over to vercel_runtime::run...");
+        tracing::info!("Running under Vercel Serverless Runtime. Handing over to vercel_runtime::run...");
         
         let vercel_service = tower::service_fn(move |(_state, req): (vercel_runtime::AppState, hyper::Request<hyper::body::Incoming>)| {
             let app = app.clone();

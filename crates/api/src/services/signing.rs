@@ -64,7 +64,7 @@ pub struct InMemorySigner {
 impl InMemorySigner {
     pub fn new(private_key_b64: &str) -> Result<Self, anyhow::Error> {
         if private_key_b64.is_empty() {
-            tracing::warn!("⚠️ No SERVER_PRIVATE_KEY_B64 provided! Generating ephemeral one-time Ed25519 signing key for development.");
+            tracing::warn!("No SERVER_PRIVATE_KEY_B64 provided! Generating ephemeral one-time Ed25519 signing key for development.");
             let key_bytes_32 = rand::random::<[u8; 32]>();
             let signing_key = SigningKey::from_bytes(&key_bytes_32);
             return Ok(Self { signing_key });
