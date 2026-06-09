@@ -120,6 +120,8 @@ pub struct OpenBaoSecrets {
     pub owner_email: String,
     #[serde(alias = "APP_URL")]
     pub app_url: String,
+    #[serde(alias = "ALLOWED_ORIGINS")]
+    pub allowed_origins: Option<String>,
     #[serde(alias = "BRAND_NAME")]
     pub brand_name: String,
     #[serde(alias = "REDIS_URL")]
@@ -214,7 +216,16 @@ impl Config {
         let s = body.data.data;
         let openbao_version = body.data.metadata.version;
 
-        let allowed_origins = vec![ax_http_header::from_str(s.app_url.trim()).unwrap()];
+        let allowed_origins = if let Some(ref origins_str) = s.allowed_origins {
+            origins_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| ax_http_header::from_str(s).unwrap())
+                .collect::<Vec<_>>()
+        } else {
+            vec![ax_http_header::from_str(s.app_url.trim()).unwrap()]
+        };
 
         tracing::info!("Config loaded from OpenBao. AEAD Key Hash: {}", hash_value(s.server_aead_key.trim()));
         println!("🚀 [DIAGNOSTIC] Config loaded from OpenBao. AEAD Key Hash: {}", hash_value(s.server_aead_key.trim()));
@@ -271,7 +282,16 @@ impl Config {
         let environment = Environment::from(tl_env_str.as_str());
 
         let app_url = env::var("TL_APP_URL").or_else(|_| env::var("APP_URL")).unwrap_or_else(|_| "http://localhost:3000".to_string()).trim().to_string();
-        let allowed_origins = vec![ax_http_header::from_str(&app_url).unwrap()];
+        let allowed_origins = if let Ok(origins_str) = env::var("TL_ALLOWED_ORIGINS").or_else(|_| env::var("ALLOWED_ORIGINS")) {
+            origins_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| ax_http_header::from_str(s).unwrap())
+                .collect::<Vec<_>>()
+        } else {
+            vec![ax_http_header::from_str(&app_url).unwrap()]
+        };
         
         let aead_key = env::var("TL_SERVER_AEAD_KEY_B64")
             .or_else(|_| env::var("SERVER_AEAD_KEY_B64"))
