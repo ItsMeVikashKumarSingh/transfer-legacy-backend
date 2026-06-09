@@ -88,3 +88,36 @@ pub async fn fetch_opaque_record(
         schema_version: row.8,
     })
 }
+
+pub async fn update_opaque_record(
+    tx: &mut Transaction<'_, Postgres>,
+    row: &OpaqueRecordRow,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE auth_ext.opaque_records SET
+            opaque_record = $2,
+            emk_blob = $3,
+            argon2_params = $4,
+            ed25519_pubkey = $5,
+            x25519_pubkey = $6,
+            kyber768_pubkey = $7,
+            crypto_version = $8,
+            schema_version = $9,
+            updated_at = now()
+        WHERE user_id = $1"#,
+    )
+    .bind(row.user_id)
+    .bind(&row.opaque_record)
+    .bind(&row.emk_blob)
+    .bind(&row.argon2_params)
+    .bind(&row.ed25519_pubkey)
+    .bind(&row.x25519_pubkey)
+    .bind(&row.kyber768_pubkey)
+    .bind(&row.crypto_version)
+    .bind(row.schema_version)
+    .execute(tx.as_mut())
+    .await?;
+
+    Ok(())
+}
+

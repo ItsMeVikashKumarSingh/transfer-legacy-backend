@@ -17,6 +17,7 @@ async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, email: &str, p
         user_id,
         registration_request: reg_req,
         credential_identifier: Some(email.to_string()),
+        verification_token: "test-bypass-token".to_string(),
     };
     let reg_init_res: RegisterInitResponse = client
         .post_aead("/v1/auth/register/init", &reg_init_req)

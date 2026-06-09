@@ -8,7 +8,12 @@ use crate::notifications::resend::NotificationTemplate;
 use crate::state::AppState;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use transfer_legacy_crypto_core::aead::decrypt;
+use transfer_legacy_crypto_core::opaque::registration_finish;
+use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
+use crate::db::queries::auth::{update_opaque_record, OpaqueRecordRow};
 use uuid::Uuid;
+use redis::AsyncCommands;
+use rand::RngCore;
 
 #[derive(Debug, Deserialize)]
 pub struct PasswordResetRequest {
@@ -16,9 +21,28 @@ pub struct PasswordResetRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PasswordResetConfirmRequest {
+pub struct PasswordResetInitRequest {
     pub access_token: String,
     pub new_password: String,
+    pub registration_request: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PasswordResetInitResponse {
+    pub session_id: Uuid,
+    pub registration_response: String,
+    pub server_nonce: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasswordResetConfirmRequest {
+    pub session_id: Uuid,
+    pub registration_upload: String,
+    pub ed25519_pubkey: String,
+    pub x25519_pubkey: String,
+    pub kyber768_pubkey: String,
+    pub emk_blob: String,
+    pub argon2_params: serde_json::Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -109,6 +133,62 @@ fn decrypt_name(key_b64: &str, enc_b64: &str, user_id: Uuid) -> anyhow::Result<S
     Ok(String::from_utf8(name_bytes)?)
 }
 
+pub async fn password_reset_init(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    headers: HeaderMap,
+    Json(payload): Json<PasswordResetInitRequest>,
+) -> Result<Json<crate::errors::SuccessEnvelope<PasswordResetInitResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let config = state.config().await;
+
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
+
+    // 1. Consume the token and reset password in Supabase
+    let user_id = crate::services::supabase::reset_password_with_token(
+        &config,
+        &payload.access_token,
+        &payload.new_password,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to verify token or reset password in Supabase: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid)
+    })?;
+
+    // 2. Initialize OPAQUE registration handshake on the server
+    let (registration_response, _req) =
+        transfer_legacy_crypto_core::opaque::registration_start(&state.opaque_setup, &payload.registration_request)
+            .map_err(|_| {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+            })?;
+
+    let session_id = Uuid::new_v4();
+    let mut nonce_bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+    let server_nonce = URL_SAFE_NO_PAD.encode(nonce_bytes);
+
+    // 3. Cache the user ID session in Redis for 5 minutes (300 seconds)
+    let mut conn = state.redis_conn.clone();
+    let redis_key = format!("opaque:reset:{}", session_id);
+    let value = user_id.to_string();
+    let _: () = conn.set_ex(redis_key, value, 300).await.map_err(|e| {
+        tracing::error!("Failed to store reset session in Redis: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    Ok(success(
+        &rid,
+        PasswordResetInitResponse {
+            session_id,
+            registration_response,
+            server_nonce,
+        },
+    ))
+}
+
 pub async fn password_reset_confirm(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
@@ -122,15 +202,75 @@ pub async fn password_reset_confirm(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
     })?;
 
-    crate::services::supabase::reset_password_with_token(
-        &config,
-        &payload.access_token,
-        &payload.new_password,
-    )
-    .await
-    .map_err(|_| {
+    // 1. Fetch user ID from Redis
+    let redis_key = format!("opaque:reset:{}", payload.session_id);
+    let mut conn = state.redis_conn.clone();
+    
+    let user_id_str: Option<String> = conn.get(&redis_key).await.map_err(|e| {
+        tracing::error!("Failed to fetch reset session from Redis: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    let user_id_str = user_id_str.ok_or_else(|| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
+
+    let user_id = Uuid::parse_str(&user_id_str).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    // 2. Decode and finalize the OPAQUE credential registration record
+    let opaque_record = registration_finish(&state.opaque_setup, &payload.registration_upload)
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+        })?;
+
+    let ed25519_pubkey = URL_SAFE_NO_PAD
+        .decode(payload.ed25519_pubkey)
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+        })?;
+    let x25519_pubkey = URL_SAFE_NO_PAD.decode(payload.x25519_pubkey).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
+    let kyber768_pubkey = URL_SAFE_NO_PAD
+        .decode(payload.kyber768_pubkey)
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+        })?;
+    let emk_blob = URL_SAFE_NO_PAD.decode(payload.emk_blob).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
+
+    let mut tx = state.db.begin().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    let row = OpaqueRecordRow {
+        user_id,
+        opaque_record,
+        emk_blob,
+        argon2_params: payload.argon2_params,
+        ed25519_pubkey,
+        x25519_pubkey,
+        kyber768_pubkey,
+        crypto_version: CURRENT_CRYPTO_VERSION.as_str().to_string(),
+        schema_version: CURRENT_SCHEMA_VERSION,
+    };
+
+    update_opaque_record(&mut tx, &row).await.map_err(|e| {
+        tracing::error!("Failed to update OPAQUE record in database: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    tx.commit().await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    // 3. Clear Redis reset session
+    let _: () = conn.del(&redis_key).await.map_err(|e| {
+        tracing::warn!("Failed to delete reset session from Redis: {:?}", e);
+    }).unwrap_or_default();
 
     Ok(success(&rid, PasswordResetResponse { status: "ok" }))
 }

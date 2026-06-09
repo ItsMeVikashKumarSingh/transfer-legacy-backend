@@ -63,6 +63,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .layer(crate::middleware::sentry_layer::SentryLayer::new());
 
     let auth_routes = Router::new()
+        .route("/register/send-otp", post(crate::handlers::auth::register_send_otp))
+        .route("/register/verify-otp", post(crate::handlers::auth::register_verify_otp))
         .route("/register/init", post(crate::handlers::auth::register_init))
         .route(
             "/register/finish",
@@ -76,6 +78,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route(
             "/password/reset/request",
             post(crate::handlers::auth::password_reset_request),
+        )
+        .route(
+            "/password/reset/init",
+            post(crate::handlers::auth::password_reset_init),
         )
         .route(
             "/password/reset/confirm",

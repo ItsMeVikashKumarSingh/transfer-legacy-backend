@@ -24,6 +24,9 @@ struct ResendPayload<'a> {
 }
 
 pub enum NotificationTemplate {
+    RegisterOtp {
+        code: String,
+    },
     Invite {
         owner_name: String,
         policy_name: String,
@@ -75,6 +78,7 @@ pub enum NotificationTemplate {
 impl NotificationTemplate {
     fn subject(&self) -> &str {
         match self {
+            Self::RegisterOtp { .. } => "Verify your Transfer Legacy Email",
             Self::Invite { .. } => "You've been invited to a Digital Inheritance Plan",
             Self::PasswordReset { .. } => "Reset your Transfer Legacy Password",
             Self::OwnerReminder { urgency, .. } => match urgency.as_str() {
@@ -94,6 +98,7 @@ impl NotificationTemplate {
 
     pub fn template_name(&self) -> String {
         match self {
+            Self::RegisterOtp { .. } => "register_otp".into(),
             Self::Invite { .. } => "invite".into(),
             Self::PasswordReset { .. } => "password_reset".into(),
             Self::OwnerReminder { urgency, .. } => format!("owner_reminder_{}", urgency),
@@ -116,7 +121,8 @@ impl NotificationTemplate {
             | Self::ReleaseReady { .. }
             | Self::PasswordReset { .. }
             | Self::OwnerReminder { .. } => "Transfer Legacy <support@transferlegacy.com>",
-            Self::SecurityAlert { .. } => "Transfer Legacy <security@transferlegacy.com>",
+            Self::SecurityAlert { .. }
+            | Self::RegisterOtp { .. } => "Transfer Legacy <security@transferlegacy.com>",
             Self::AdminCreated { .. } => "Transfer Legacy Control <security@transferlegacy.com>",
             Self::WaitlistWelcome { .. } => "Transfer Legacy <waitlist@transferlegacy.com>",
         }
@@ -174,6 +180,9 @@ pub async fn send_notification(
             params.insert("policy_name", policy_name.clone());
             params.insert("invite_url", invite_url.clone());
             params.insert("expires_at", expires_at.clone());
+        }
+        NotificationTemplate::RegisterOtp { code } => {
+            params.insert("code", code.clone());
         }
         NotificationTemplate::PasswordReset {
             owner_name,

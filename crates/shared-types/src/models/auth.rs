@@ -6,6 +6,7 @@ pub struct RegisterInitRequest {
     pub user_id: Uuid,
     pub registration_request: String,
     pub credential_identifier: Option<String>,
+    pub verification_token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -21,6 +21,7 @@ async fn test_full_auth_lifecycle() {
         user_id,
         registration_request: reg_req,
         credential_identifier: Some(email.clone()),
+        verification_token: "test-bypass-token".to_string(),
     };
 
     let reg_init_res: RegisterInitResponse = client

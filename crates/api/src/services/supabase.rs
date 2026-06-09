@@ -104,7 +104,7 @@ pub async fn reset_password_with_token(
     config: &Config,
     access_token: &str,
     new_password: &str,
-) -> Result<(), SupabaseError> {
+) -> Result<uuid::Uuid, SupabaseError> {
     let client = Client::new();
     let url = format!("{}/auth/v1/user", config.supabase_url);
     let res = client
@@ -117,7 +117,10 @@ pub async fn reset_password_with_token(
         .map_err(|_| SupabaseError::Http)?;
 
     if res.status().is_success() {
-        Ok(())
+        let body: serde_json::Value = res.json().await.map_err(|_| SupabaseError::Unexpected)?;
+        let id_str = body.get("id").and_then(|v| v.as_str()).ok_or(SupabaseError::Unexpected)?;
+        let user_id = uuid::Uuid::parse_str(id_str).map_err(|_| SupabaseError::Unexpected)?;
+        Ok(user_id)
     } else {
         Err(SupabaseError::Unexpected)
     }
@@ -216,3 +219,25 @@ pub async fn delete_user_in_supabase(
         Err(SupabaseError::Unexpected)
     }
 }
+
+pub async fn get_user_id_from_token(config: &Config, access_token: &str) -> Result<uuid::Uuid, SupabaseError> {
+    let client = Client::new();
+    let url = format!("{}/auth/v1/user", config.supabase_url);
+    let res = client
+        .get(url)
+        .header("apikey", config.supabase_publishable_key.as_str())
+        .header("Authorization", format!("Bearer {}", access_token))
+        .send()
+        .await
+        .map_err(|_| SupabaseError::Http)?;
+
+    if res.status().is_success() {
+        let body: serde_json::Value = res.json().await.map_err(|_| SupabaseError::Unexpected)?;
+        let id_str = body.get("id").and_then(|v| v.as_str()).ok_or(SupabaseError::Unexpected)?;
+        let user_id = uuid::Uuid::parse_str(id_str).map_err(|_| SupabaseError::Unexpected)?;
+        Ok(user_id)
+    } else {
+        Err(SupabaseError::Unexpected)
+    }
+}
+
