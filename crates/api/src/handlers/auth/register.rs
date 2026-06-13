@@ -320,6 +320,33 @@ pub async fn register_send_otp(
     let rate_key = format!("otp_send:{}", payload.email);
     enforce_rate_limit(&state, &rate_key, 5).await?;
 
+    // Check if the user email already exists in auth.users
+    let existing_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM auth.users WHERE email = $1")
+        .bind(&payload.email)
+        .fetch_optional(state.db())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check existing email in auth.users during OTP: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
+    if let Some(old_uid) = existing_id {
+        // Check if a completed OPAQUE record exists for this user ID
+        let has_opaque: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM auth_ext.opaque_records WHERE user_id = $1)")
+            .bind(old_uid)
+            .fetch_one(state.db())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to check existing opaque record during OTP: {:?}", e);
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            })?;
+
+        if has_opaque {
+            // Already registered!
+            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid));
+        }
+    }
+
     let otp_code = format!("{:06}", rand::thread_rng().gen_range(0..1000000));
 
     let redis_key = format!("otp:reg:{}", payload.email);

@@ -34,13 +34,18 @@ pub async fn spawn_app() -> TestContext {
 
     // Attempt to load from environment first (for local tests with .env.local),
     // then fallback to real OpenBao load if needed.
-    let config = if let Ok(c) = Config::from_env() {
+    let mut config = if let Ok(c) = Config::from_env() {
         c
     } else {
         Config::load()
             .await
             .expect("Failed to load config from both Env and OpenBao.")
     };
+
+    // Prevent real email delivery during standard test runs
+    if std::env::var("TEST_REAL_EMAIL").unwrap_or_default() != "true" {
+        config.resend_api_key = "re_mock_test_suite".to_string();
+    }
 
     let pool = PgPool::connect(&config.database_url)
         .await

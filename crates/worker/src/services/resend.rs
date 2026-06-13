@@ -88,6 +88,12 @@ pub async fn send_email(
         .render_template(&html_content, &params_map)
         .map_err(|e| ResendError::Template(format!("Failed to render template: {}", e)))?;
 
+    // --- Mock Mode Check ---
+    if config.resend_api_key.starts_with("re_mock_") {
+        println!("✉️ MOCK EMAIL WORKER LOG: To: {}, Subject: {}", to_email, subject);
+        return Ok(());
+    }
+
     let client = Client::new();
     let url = "https://api.resend.com/emails";
 
