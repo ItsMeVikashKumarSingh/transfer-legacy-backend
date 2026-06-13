@@ -197,8 +197,11 @@ mod tests {
             supabase_publishable_key: "test".to_string(),
             supabase_secret_key: "test".to_string(),
             server_hmac_secret: "test-hmac".to_string(),
-            resend_api_key: std::env::var("RESEND_API_KEY")
-                .unwrap_or_else(|_| "test-key".to_string()),
+            resend_api_key: if std::env::var("TEST_REAL_EMAIL").unwrap_or_default() == "true" {
+                std::env::var("RESEND_API_KEY").unwrap_or_else(|_| "re_mock_test_key".to_string())
+            } else {
+                "re_mock_test_key".to_string()
+            },
             owner_email: "vikashbro111@gmail.com".to_string(),
             ops_admin_email: "admin@transferlegacy.com".to_string(),
             ops_admin_password: "Admin@123".to_string(),
