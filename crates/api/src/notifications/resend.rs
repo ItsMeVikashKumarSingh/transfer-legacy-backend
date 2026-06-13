@@ -136,27 +136,23 @@ pub async fn send_notification(
 ) -> Result<(), ResendError> {
     let mut hb = Handlebars::new();
 
-    // Load template from local docs/templates or parent directory (for workspace tests)
     let template_name = template.template_name();
-    let paths = vec![
-        format!("docs/templates/{}.html", template_name),
-        format!("../../docs/templates/{}.html", template_name),
-    ];
-
-    let mut html_content = None;
-    for path in &paths {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            html_content = Some(content);
-            break;
-        }
-    }
-
-    let html_content = html_content.ok_or_else(|| {
-        ResendError::Template(format!(
-            "Failed to find template {} in paths: {:?}",
-            template_name, paths
-        ))
-    })?;
+    let html_content = match template_name.as_str() {
+        "admin_created" => include_str!("../../../../docs/templates/admin_created.html"),
+        "approver_attestation_request" => include_str!("../../../../docs/templates/approver_attestation_request.html"),
+        "beneficiary_claim_available" => include_str!("../../../../docs/templates/beneficiary_claim_available.html"),
+        "conflict_hold_notice" => include_str!("../../../../docs/templates/conflict_hold_notice.html"),
+        "invite" => include_str!("../../../../docs/templates/invite.html"),
+        "owner_reminder_daily" => include_str!("../../../../docs/templates/owner_reminder_daily.html"),
+        "owner_reminder_early" => include_str!("../../../../docs/templates/owner_reminder_early.html"),
+        "owner_reminder_urgent" => include_str!("../../../../docs/templates/owner_reminder_urgent.html"),
+        "password_reset" => include_str!("../../../../docs/templates/password_reset.html"),
+        "register_otp" => include_str!("../../../../docs/templates/register_otp.html"),
+        "release_ready" => include_str!("../../../../docs/templates/release_ready.html"),
+        "security_alert" => include_str!("../../../../docs/templates/security_alert.html"),
+        "waitlist_welcome" => include_str!("../../../../docs/templates/waitlist_welcome.html"),
+        _ => return Err(ResendError::Template(format!("Unknown template: {}", template_name))),
+    };
 
     // Centralized parameters for all emails
     let mut params = HashMap::new();

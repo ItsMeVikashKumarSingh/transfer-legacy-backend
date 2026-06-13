@@ -30,12 +30,22 @@ pub async fn send_email(
 ) -> Result<(), ResendError> {
     let hb = Handlebars::new();
 
-    // Load template from local docs/templates
-    let template_path = format!("docs/templates/{}.html", template_name);
-
-    let html_content = std::fs::read_to_string(&template_path).map_err(|e| {
-        ResendError::Template(format!("Failed to read template {}: {}", template_name, e))
-    })?;
+    let html_content = match template_name {
+        "admin_created" => include_str!("../../../../docs/templates/admin_created.html"),
+        "approver_attestation_request" => include_str!("../../../../docs/templates/approver_attestation_request.html"),
+        "beneficiary_claim_available" => include_str!("../../../../docs/templates/beneficiary_claim_available.html"),
+        "conflict_hold_notice" => include_str!("../../../../docs/templates/conflict_hold_notice.html"),
+        "invite" => include_str!("../../../../docs/templates/invite.html"),
+        "owner_reminder_daily" => include_str!("../../../../docs/templates/owner_reminder_daily.html"),
+        "owner_reminder_early" => include_str!("../../../../docs/templates/owner_reminder_early.html"),
+        "owner_reminder_urgent" => include_str!("../../../../docs/templates/owner_reminder_urgent.html"),
+        "password_reset" => include_str!("../../../../docs/templates/password_reset.html"),
+        "register_otp" => include_str!("../../../../docs/templates/register_otp.html"),
+        "release_ready" => include_str!("../../../../docs/templates/release_ready.html"),
+        "security_alert" => include_str!("../../../../docs/templates/security_alert.html"),
+        "waitlist_welcome" => include_str!("../../../../docs/templates/waitlist_welcome.html"),
+        _ => return Err(ResendError::Template(format!("Unknown template: {}", template_name))),
+    };
 
     // Determine Subject and From address based on template name
     let (subject, from) = match template_name {
