@@ -248,13 +248,20 @@ pub async fn register_finish(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
     })?;
 
-    let mut tx = state.db.begin().await.map_err(|_| {
+    let mut tx = state.db.begin().await.map_err(|e| {
+        tracing::error!("Failed to begin transaction: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
     let _person_id = insert_person_and_link(&mut tx, session.user_id, enc_legal_name, enc_email)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            tracing::error!("Failed to insert person and link: {:?}", e);
+            if let sqlx::Error::Database(ref db_err) = e {
+                if db_err.code().as_deref() == Some("23505") {
+                    return ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid);
+                }
+            }
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
 
@@ -269,11 +276,18 @@ pub async fn register_finish(
         crypto_version: CURRENT_CRYPTO_VERSION.as_str().to_string(),
         schema_version: CURRENT_SCHEMA_VERSION,
     };
-    insert_opaque_record(&mut tx, &row).await.map_err(|_| {
+    insert_opaque_record(&mut tx, &row).await.map_err(|e| {
+        tracing::error!("Failed to insert opaque record: {:?}", e);
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.code().as_deref() == Some("23505") {
+                return ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid);
+            }
+        }
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
-    tx.commit().await.map_err(|_| {
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Failed to commit transaction: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 

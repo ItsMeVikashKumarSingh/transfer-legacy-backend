@@ -71,7 +71,11 @@ pub async fn login_init(
         .await
         .map_err(|e| {
             tracing::error!("fetch_opaque_record failed in login_init for user {}: {:?}", payload.user_id, e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+            if matches!(e, sqlx::Error::RowNotFound) {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+            } else {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            }
         })?;
 
     let (credential_response, server_state) = login_start(
@@ -158,8 +162,13 @@ pub async fn login_finish(
 
     let record = fetch_opaque_record(&state.db, session.user_id)
         .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        .map_err(|e| {
+            tracing::error!("fetch_opaque_record failed in login_finish for user {}: {:?}", session.user_id, e);
+            if matches!(e, sqlx::Error::RowNotFound) {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+            } else {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            }
         })?;
 
     let session_token = crate::services::sessions::issue_session_token(&config, session.user_id)
