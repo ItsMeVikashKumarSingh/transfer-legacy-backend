@@ -46,6 +46,7 @@ pub struct RegisterFinishRequest {
 #[derive(Debug, Serialize)]
 pub struct RegisterFinishResponse {
     pub user_id: Uuid,
+    pub person_id: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -253,7 +254,7 @@ pub async fn register_finish(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
-    let _person_id = insert_person_and_link(&mut tx, session.user_id, enc_legal_name, enc_email)
+    let person_id = insert_person_and_link(&mut tx, session.user_id, enc_legal_name, enc_email)
         .await
         .map_err(|e| {
             tracing::error!("Failed to insert person and link: {:?}", e);
@@ -294,6 +295,7 @@ pub async fn register_finish(
     let envelope = crate::errors::SuccessEnvelope {
         data: RegisterFinishResponse {
             user_id: session.user_id,
+            person_id,
         },
         request_id: rid,
     };

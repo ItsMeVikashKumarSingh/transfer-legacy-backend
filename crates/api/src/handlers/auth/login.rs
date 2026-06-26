@@ -38,6 +38,7 @@ pub struct LoginFinishRequest {
 #[derive(Debug, Serialize)]
 pub struct LoginFinishResponse {
     pub user_id: Uuid,
+    pub person_id: Uuid,
     pub session_token: String,
     pub emk_blob: String,
     pub argon2_params: serde_json::Value,
@@ -171,6 +172,17 @@ pub async fn login_finish(
             }
         })?;
 
+    let person_id: Uuid = sqlx::query_scalar(
+        "SELECT person_id FROM auth_ext.person_user_links WHERE user_id = $1"
+    )
+    .bind(session.user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch person_id for user {}: {:?}", session.user_id, e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
     let session_token = crate::services::sessions::issue_session_token(&config, session.user_id)
         .map_err(|_| {
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
@@ -183,6 +195,7 @@ pub async fn login_finish(
     let envelope = crate::errors::SuccessEnvelope {
         data: LoginFinishResponse {
             user_id: session.user_id,
+            person_id,
             session_token,
             emk_blob: URL_SAFE_NO_PAD.encode(record.emk_blob),
             argon2_params: record.argon2_params,
