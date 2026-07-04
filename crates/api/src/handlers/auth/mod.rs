@@ -6,7 +6,7 @@ pub mod refresh;
 pub mod register;
 pub mod stepup;
 
-pub use login::{login_finish, login_init, lookup_user_id};
+pub use login::{login_finish, login_init, lookup_user_id, lookup_user_keys};
 pub use logout::logout;
 pub use password::{password_reset_confirm, password_reset_init, password_reset_request};
 pub use refresh::refresh;

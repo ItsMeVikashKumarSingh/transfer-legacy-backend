@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::db::queries::auth::fetch_opaque_record;
 use crate::db::queries::vault::{
-    delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share,
+    delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share, update_item,
 };
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
@@ -68,6 +68,19 @@ pub struct DeleteItemRequest {
 
 #[derive(Debug, Serialize)]
 pub struct DeleteItemResponse {
+    pub status: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateItemRequest {
+    pub user_id: Uuid,
+    pub item_id: Uuid,
+    pub ciphertext: String,
+    pub item_meta: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateItemResponse {
     pub status: &'static str,
 }
 
@@ -250,6 +263,49 @@ pub async fn delete_item_handler(
 
     let envelope = crate::errors::SuccessEnvelope {
         data: DeleteItemResponse { status: "ok" },
+        request_id: rid,
+    };
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
+    Ok(Json(aead))
+}
+
+pub async fn update_item_handler(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    headers: HeaderMap,
+    AeadJson(payload): AeadJson<UpdateItemRequest>,
+) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
+
+    let ciphertext = URL_SAFE_NO_PAD.decode(payload.ciphertext).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
+
+    // Check if item exists and is owned by the user
+    let _existing = get_item(&state.db, payload.user_id, payload.item_id)
+        .await
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
+
+    update_item(
+        &state.db,
+        payload.user_id,
+        payload.item_id,
+        ciphertext,
+        payload.item_meta,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    let envelope = crate::errors::SuccessEnvelope {
+        data: UpdateItemResponse { status: "ok" },
         request_id: rid,
     };
     let config = state.config().await;

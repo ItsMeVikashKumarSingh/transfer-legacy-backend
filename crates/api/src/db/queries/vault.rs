@@ -99,6 +99,26 @@ pub async fn delete_item(pool: &PgPool, user_id: Uuid, item_id: Uuid) -> Result<
     Ok(())
 }
 
+pub async fn update_item(
+    pool: &PgPool,
+    user_id: Uuid,
+    item_id: Uuid,
+    ciphertext: Vec<u8>,
+    item_meta: Option<Value>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE core.items SET ciphertext = $1, item_meta = $2, version = version + 1, updated_at = now() WHERE user_id = $3 AND item_id = $4 AND is_deleted = false",
+    )
+    .bind(ciphertext)
+    .bind(item_meta)
+    .bind(user_id)
+    .bind(item_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+
 pub async fn insert_share(
     pool: &PgPool,
     owner_id: Uuid,

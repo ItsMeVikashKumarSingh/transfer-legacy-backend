@@ -10,4 +10,4 @@ pub use envelopes::list_envelopes;
 pub use evidence::create_evidence_package;
 pub use heartbeat::heartbeat;
 pub use invite::create_invite;
-pub use policy::upsert_policy;
+pub use policy::{upsert_policy, get_policy_handler};

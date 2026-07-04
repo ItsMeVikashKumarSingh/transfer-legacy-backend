@@ -121,3 +121,27 @@ pub async fn update_opaque_record(
     Ok(())
 }
 
+pub struct UserKeysRow {
+    pub user_id: Uuid,
+    pub x25519_pubkey: Vec<u8>,
+    pub kyber768_pubkey: Vec<u8>,
+}
+
+pub async fn fetch_user_keys_by_email(pool: &PgPool, email: &str) -> Result<UserKeysRow, sqlx::Error> {
+    let row = sqlx::query_as::<_, (Uuid, Vec<u8>, Vec<u8>)>(
+        r#"SELECT user_id, x25519_pubkey, kyber768_pubkey 
+        FROM auth_ext.opaque_records 
+        WHERE user_id = (SELECT id FROM auth.users WHERE email = $1)"#,
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(UserKeysRow {
+        user_id: row.0,
+        x25519_pubkey: row.1,
+        kyber768_pubkey: row.2,
+    })
+}
+
+

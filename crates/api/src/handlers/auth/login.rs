@@ -6,7 +6,7 @@ use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::db::queries::auth::fetch_opaque_record;
+use crate::db::queries::auth::{fetch_opaque_record, fetch_user_keys_by_email};
 use crate::errors::{success, ApiError, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::{enforce_rate_limit, require_idempotency};
@@ -240,6 +240,44 @@ pub async fn lookup_user_id(
 
     Ok(Json(crate::errors::SuccessEnvelope {
         data: UserIdLookupResponse { user_id },
+        request_id: rid,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserKeysLookupRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserKeysLookupResponse {
+    pub user_id: Uuid,
+    pub x25519_pubkey: String,
+    pub kyber768_pubkey: String,
+}
+
+pub async fn lookup_user_keys(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Json(payload): Json<UserKeysLookupRequest>,
+) -> Result<Json<crate::errors::SuccessEnvelope<UserKeysLookupResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let keys = fetch_user_keys_by_email(&state.db, &payload.email)
+        .await
+        .map_err(|e| {
+            if matches!(e, sqlx::Error::RowNotFound) {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+            } else {
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+            }
+        })?;
+
+    Ok(Json(crate::errors::SuccessEnvelope {
+        data: UserKeysLookupResponse {
+            user_id: keys.user_id,
+            x25519_pubkey: URL_SAFE_NO_PAD.encode(keys.x25519_pubkey),
+            kyber768_pubkey: URL_SAFE_NO_PAD.encode(keys.kyber768_pubkey),
+        },
         request_id: rid,
     }))
 }

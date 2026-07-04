@@ -73,6 +73,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/login/init", post(crate::handlers::auth::login_init))
         .route("/login/finish", post(crate::handlers::auth::login_finish))
         .route("/user-id", post(crate::handlers::auth::lookup_user_id))
+        .route("/user-keys", post(crate::handlers::auth::lookup_user_keys))
         .route("/logout", post(crate::handlers::auth::logout))
         .route("/refresh", post(crate::handlers::auth::refresh))
         .route(
@@ -133,6 +134,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             "/items/delete",
             post(crate::handlers::vault::delete_item_handler),
         )
+        .route(
+            "/items/update",
+            post(crate::handlers::vault::update_item_handler),
+        )
         .route("/shares", post(crate::handlers::vault::create_share))
         .route(
             "/shares/list",
@@ -146,6 +151,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
 
     let inheritance_routes = Router::new()
         .route("/policy", put(crate::handlers::inheritance::upsert_policy))
+        .route(
+            "/policy/get",
+            post(crate::handlers::inheritance::get_policy_handler),
+        )
         .route("/heartbeat", post(crate::handlers::inheritance::heartbeat))
         .route(
             "/policy/:policy_id/invite",
