@@ -97,4 +97,43 @@ impl AppState {
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }
+
+    pub async fn redis_get(&self, key: &str) -> Result<Option<String>, redis::RedisError> {
+        use redis::AsyncCommands;
+        let mut conn = self.redis_conn.clone();
+        match conn.get(key).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::warn!("Redis GET failed, retrying once. Error: {:?}", e);
+                let mut retry_conn = self.redis_conn.clone();
+                retry_conn.get(key).await
+            }
+        }
+    }
+
+    pub async fn redis_set_ex(&self, key: &str, value: &str, seconds: u64) -> Result<(), redis::RedisError> {
+        use redis::AsyncCommands;
+        let mut conn = self.redis_conn.clone();
+        match conn.set_ex(key, value, seconds).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::warn!("Redis SET_EX failed, retrying once. Error: {:?}", e);
+                let mut retry_conn = self.redis_conn.clone();
+                retry_conn.set_ex(key, value, seconds).await
+            }
+        }
+    }
+
+    pub async fn redis_del(&self, key: &str) -> Result<(), redis::RedisError> {
+        use redis::AsyncCommands;
+        let mut conn = self.redis_conn.clone();
+        match conn.del(key).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::warn!("Redis DEL failed, retrying once. Error: {:?}", e);
+                let mut retry_conn = self.redis_conn.clone();
+                retry_conn.del(key).await
+            }
+        }
+    }
 }

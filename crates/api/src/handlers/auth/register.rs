@@ -81,9 +81,8 @@ pub async fn register_init(
 
     if !bypass_otp {
         let verify_key = format!("verified:email:{}", credential_identifier);
-        let mut conn = state.redis_conn.clone();
         
-        let cached_token: Option<String> = conn.get(&verify_key).await.map_err(|e| {
+        let cached_token: Option<String> = state.redis_get(&verify_key).await.map_err(|e| {
             tracing::error!("Failed to fetch verification token from Redis: {:?}", e);
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
@@ -97,7 +96,7 @@ pub async fn register_init(
         }
 
         // Delete token to prevent reuse
-        let _: () = conn.del(&verify_key).await.map_err(|e| {
+        let _: () = state.redis_del(&verify_key).await.map_err(|e| {
             tracing::warn!("Failed to delete registration verification token: {:?}", e);
         }).unwrap_or_default();
     }
@@ -162,28 +161,16 @@ pub async fn register_init(
         user_id: payload.user_id,
         credential_identifier,
     };
-    let mut conn = state.redis_conn.clone();
-
     let key = format!("opaque:reg:{}", session_id);
     let value = serde_json::to_string(&session).map_err(|e| {
         tracing::error!("register_init: Failed to serialize OPAQUE session: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
     
-    // SET_EX with 1 retry to handle idle connection drops gracefully
-    let set_res: Result<(), redis::RedisError> = conn.set_ex(&key, value.clone(), 300).await;
-    let _: () = match set_res {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            tracing::warn!("register_init: Redis set_ex failed, retrying once. Error: {:?}", e);
-            let mut retry_conn = state.redis_conn.clone();
-            let retry_res: Result<(), redis::RedisError> = retry_conn.set_ex(&key, value, 300).await;
-            retry_res.map_err(|err| {
-                tracing::error!("register_init: Redis set_ex retry failed for key '{}': {:?}", key, err);
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-            })
-        }
-    }?;
+    state.redis_set_ex(&key, &value, 300).await.map_err(|err| {
+        tracing::error!("register_init: Redis set_ex failed for key '{}': {:?}", key, err);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let envelope = SuccessEnvelope {
         data: RegisterInitResponse {
@@ -207,9 +194,9 @@ pub async fn register_finish(
     let config = state.config().await;
 
     require_idempotency(&state, &headers).await?;
-    let mut conn = state.redis_conn.clone();
     let key = format!("opaque:reg:{}", payload.session_id);
-    let session_json: Option<String> = conn.get(&key).await.map_err(|_| {
+    let session_json: Option<String> = state.redis_get(&key).await.map_err(|e| {
+        tracing::error!("register_finish: Redis get failed: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
     let session_json = session_json.ok_or_else(|| {
@@ -366,9 +353,7 @@ pub async fn register_send_otp(
     let otp_code = format!("{:06}", rand::thread_rng().gen_range(0..1000000));
 
     let redis_key = format!("otp:reg:{}", payload.email);
-    let mut conn = state.redis_conn.clone();
-    
-    let _: () = conn.set_ex(&redis_key, &otp_code, 300).await.map_err(|e| {
+    state.redis_set_ex(&redis_key, &otp_code, 300).await.map_err(|e| {
         tracing::error!("Failed to store OTP in Redis: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
@@ -398,9 +383,8 @@ pub async fn register_verify_otp(
     enforce_rate_limit(&state, &rate_key, 5).await?;
 
     let redis_key = format!("otp:reg:{}", payload.email);
-    let mut conn = state.redis_conn.clone();
 
-    let cached_otp: Option<String> = conn.get(&redis_key).await.map_err(|e| {
+    let cached_otp: Option<String> = state.redis_get(&redis_key).await.map_err(|e| {
         tracing::error!("Failed to fetch OTP from Redis: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
@@ -413,16 +397,17 @@ pub async fn register_verify_otp(
         return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
     }
 
-    let _: () = conn.del(&redis_key).await.map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    let _: () = state.redis_del(&redis_key).await.map_err(|e| {
+        tracing::warn!("Failed to delete OTP from Redis: {:?}", e);
+    }).unwrap_or_default();
 
     let mut token_bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut token_bytes);
     let verification_token = URL_SAFE_NO_PAD.encode(token_bytes);
 
     let verify_key = format!("verified:email:{}", payload.email);
-    let _: () = conn.set_ex(&verify_key, &verification_token, 600).await.map_err(|_| {
+    state.redis_set_ex(&verify_key, &verification_token, 600).await.map_err(|e| {
+        tracing::error!("Failed to save verification token: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 

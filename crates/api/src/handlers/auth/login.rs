@@ -105,13 +105,12 @@ pub async fn login_init(
         state_b64,
     };
 
-    let mut conn = state.redis_conn.clone();
     let key = format!("opaque:login:{}", session_id);
     let value = serde_json::to_string(&session).map_err(|e| {
         tracing::error!("serde_json::to_string failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    let _: () = conn.set_ex(key, value, 300).await.map_err(|e| {
+    state.redis_set_ex(&key, &value, 300).await.map_err(|e| {
         tracing::error!("Redis set_ex failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
@@ -138,9 +137,9 @@ pub async fn login_finish(
     let config = state.config().await;
 
     require_idempotency(&state, &headers).await?;
-    let mut conn = state.redis_conn.clone();
     let key = format!("opaque:login:{}", payload.session_id);
-    let session_json: Option<String> = conn.get(&key).await.map_err(|_| {
+    let session_json: Option<String> = state.redis_get(&key).await.map_err(|e| {
+        tracing::error!("Redis get failed in login_finish: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
     let session_json = session_json.ok_or_else(|| {
@@ -188,7 +187,8 @@ pub async fn login_finish(
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
 
-    let _: () = conn.del(&key).await.map_err(|_| {
+    let _: () = state.redis_del(&key).await.map_err(|e| {
+        tracing::error!("Redis del failed in login_finish: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 

@@ -28,7 +28,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             HeaderName::from_static("x-timestamp"),
             HeaderName::from_static("x-device-id"),
             HeaderName::from_static("x-idempotency-key"),
-        ]);
+        ])
+        .allow_credentials(true);
 
     let security_headers = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::if_not_present(
