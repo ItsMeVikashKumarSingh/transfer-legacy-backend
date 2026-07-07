@@ -73,7 +73,7 @@ pub async fn login_init(
         .map_err(|e| {
             tracing::error!("fetch_opaque_record failed in login_init for user {}: {:?}", payload.user_id, e);
             if matches!(e, sqlx::Error::RowNotFound) {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)
             } else {
                 ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
             }
@@ -165,7 +165,7 @@ pub async fn login_finish(
         .map_err(|e| {
             tracing::error!("fetch_opaque_record failed in login_finish for user {}: {:?}", session.user_id, e);
             if matches!(e, sqlx::Error::RowNotFound) {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)
             } else {
                 ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
             }
@@ -235,7 +235,7 @@ pub async fn lookup_user_id(
         })?;
 
     let user_id = row.ok_or_else(|| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)
     })?;
 
     Ok(Json(crate::errors::SuccessEnvelope {

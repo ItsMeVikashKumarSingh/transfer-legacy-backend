@@ -20,6 +20,7 @@ pub enum AppError {
     DualSignatureRequired,
     OtpExpired,
     OtpInvalid,
+    UserNotFound,
 }
 
 impl AppError {
@@ -41,6 +42,7 @@ impl AppError {
             AppError::DualSignatureRequired => "ERR_DUAL_SIGNATURE_REQUIRED",
             AppError::OtpExpired => "ERR_OTP_EXPIRED",
             AppError::OtpInvalid => "ERR_OTP_INVALID",
+            AppError::UserNotFound => "ERR_USER_NOT_FOUND",
         }
     }
 
@@ -62,6 +64,7 @@ impl AppError {
             AppError::DualSignatureRequired => "This action requires dual operator approval signatures.",
             AppError::OtpExpired => "Verification code expired or not found. Please request a new code.",
             AppError::OtpInvalid => "Incorrect verification code. Please check and try again.",
+            AppError::UserNotFound => "User does not exist.",
         }
     }
 }

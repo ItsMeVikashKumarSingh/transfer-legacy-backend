@@ -126,5 +126,6 @@ fn status_for(err: &AppError) -> StatusCode {
         AppError::DualSignatureRequired => StatusCode::BAD_REQUEST,
         AppError::OtpExpired => StatusCode::NOT_FOUND,
         AppError::OtpInvalid => StatusCode::UNAUTHORIZED,
+        AppError::UserNotFound => StatusCode::NOT_FOUND,
     }
 }
