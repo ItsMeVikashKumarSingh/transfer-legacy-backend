@@ -390,11 +390,11 @@ pub async fn register_verify_otp(
     })?;
 
     let cached_otp = cached_otp.ok_or_else(|| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::OtpExpired, &rid)
     })?;
 
     if cached_otp != payload.code {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::OtpInvalid, &rid));
     }
 
     let _: () = state.redis_del(&redis_key).await.map_err(|e| {

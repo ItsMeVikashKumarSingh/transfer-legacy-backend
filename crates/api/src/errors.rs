@@ -124,5 +124,7 @@ fn status_for(err: &AppError) -> StatusCode {
         AppError::EnvelopeRecipientMismatch => StatusCode::BAD_REQUEST,
         AppError::CryptoVersionUnsupported => StatusCode::BAD_REQUEST,
         AppError::DualSignatureRequired => StatusCode::BAD_REQUEST,
+        AppError::OtpExpired => StatusCode::NOT_FOUND,
+        AppError::OtpInvalid => StatusCode::UNAUTHORIZED,
     }
 }

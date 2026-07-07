@@ -18,6 +18,8 @@ pub enum AppError {
     EnvelopeRecipientMismatch,
     CryptoVersionUnsupported,
     DualSignatureRequired,
+    OtpExpired,
+    OtpInvalid,
 }
 
 impl AppError {
@@ -37,25 +39,29 @@ impl AppError {
             AppError::EnvelopeRecipientMismatch => "ERR_ENVELOPE_RECIPIENT_MISMATCH",
             AppError::CryptoVersionUnsupported => "ERR_CRYPTO_VERSION_UNSUPPORTED",
             AppError::DualSignatureRequired => "ERR_DUAL_SIGNATURE_REQUIRED",
+            AppError::OtpExpired => "ERR_OTP_EXPIRED",
+            AppError::OtpInvalid => "ERR_OTP_INVALID",
         }
     }
 
     pub fn message(&self) -> &'static str {
         match self {
-            AppError::BadRequest => "Invalid request.",
-            AppError::Unauthorized => "Authentication required.",
-            AppError::Forbidden => "Forbidden.",
-            AppError::NotFound => "Resource not found.",
-            AppError::Conflict => "Conflict.",
-            AppError::RateLimited => "Too many requests.",
-            AppError::Internal => "Internal server error.",
-            AppError::AeadIntegrity => "Request integrity check failed.",
-            AppError::ReplayDetected => "Replay detected.",
-            AppError::ReplayOrSkew => "Replay or clock skew detected.",
-            AppError::SignatureInvalid => "Signature verification failed.",
-            AppError::EnvelopeRecipientMismatch => "Envelope recipient mismatch.",
-            AppError::CryptoVersionUnsupported => "Unsupported crypto version.",
-            AppError::DualSignatureRequired => "Dual operator signature required.",
+            AppError::BadRequest => "The request is invalid or could not be understood.",
+            AppError::Unauthorized => "Authentication is failed or required.",
+            AppError::Forbidden => "Access denied. You do not have permission to perform this action.",
+            AppError::NotFound => "The requested resource could not be found.",
+            AppError::Conflict => "A resource conflict occurred (e.g. data already exists).",
+            AppError::RateLimited => "Too many requests. Please wait and try again later.",
+            AppError::Internal => "An unexpected server error occurred. Please try again later.",
+            AppError::AeadIntegrity => "Request data integrity check failed.",
+            AppError::ReplayDetected => "Request rejected: potential replay attack detected.",
+            AppError::ReplayOrSkew => "Request timestamp is invalid or has expired.",
+            AppError::SignatureInvalid => "Cryptographic signature verification failed.",
+            AppError::EnvelopeRecipientMismatch => "Recipient identifier does not match the envelope destination.",
+            AppError::CryptoVersionUnsupported => "The requested cryptographic protocol version is not supported.",
+            AppError::DualSignatureRequired => "This action requires dual operator approval signatures.",
+            AppError::OtpExpired => "Verification code expired or not found. Please request a new code.",
+            AppError::OtpInvalid => "Incorrect verification code. Please check and try again.",
         }
     }
 }
