@@ -273,26 +273,30 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/conflict-check", post(crate::handlers::jobs::conflict_check))
         .route("/release-delivery", post(crate::handlers::jobs::release_delivery));
 
+    let api_routes = Router::new()
+        .route("/server-capabilities", get(capabilities))
+        .route(
+            "/openapi.json",
+            get(crate::handlers::openapi::openapi_json),
+        )
+        .route("/docs", get(crate::handlers::openapi::docs_ui))
+        .nest("/auth", auth_routes)
+        .nest("/devices", device_routes)
+        .nest("/vault", vault_routes)
+        .nest("/inheritance", inheritance_routes)
+        .nest("/claims", claims_routes)
+        .nest("/audit", audit_routes)
+        .nest("/gdpr", gdpr_routes)
+        .nest("/app", app_routes)
+        .nest("/ops", ops_routes)
+        .nest("/jobs", jobs_routes);
+
     Router::new()
         .route("/", get(|| async { "ok" }))
         .route("/health", get(health))
         .route("/metrics", get(crate::handlers::metrics::metrics))
-        .route("/v1/server-capabilities", get(capabilities))
-        .route(
-            "/v1/openapi.json",
-            get(crate::handlers::openapi::openapi_json),
-        )
-        .route("/v1/docs", get(crate::handlers::openapi::docs_ui))
-        .nest("/v1/auth", auth_routes)
-        .nest("/v1/devices", device_routes)
-        .nest("/v1/vault", vault_routes)
-        .nest("/v1/inheritance", inheritance_routes)
-        .nest("/v1/claims", claims_routes)
-        .nest("/v1/audit", audit_routes)
-        .nest("/v1/gdpr", gdpr_routes)
-        .nest("/v1/app", app_routes)
-        .nest("/v1/ops", ops_routes)
-        .nest("/v1/jobs", jobs_routes)
+        .nest("/v1", api_routes.clone())
+        .nest("/", api_routes)
         .with_state(state)
         .layer(from_fn(crate::middleware::metrics::metrics_middleware))
         .layer(middleware_stack)
