@@ -33,9 +33,9 @@ ON CONFLICT (name) DO UPDATE SET permissions = EXCLUDED.permissions;
 
 -- Seed initial super admin
 -- Password is 'admin123' 
--- Hash: $argon2id$v=19$m=4096,t=3,p=1$dmVrYXNoMTIz$u8L7E2X4G8OQ6Q4Z5X8y2u8L7E2X4G8OQ6Q4Z5X8y2u
+-- Hash: $argon2id$v=19$m=4096,t=3,p=1$dmVrYXNoMTIz$XTkrALwVGQ4QCmrlpw8C4kvTGTapPhYmDSAs14SjsnY
 INSERT INTO ops.admins (email, password_hash, role_id)
-SELECT 'admin@transferlegacy.com', '$argon2id$v=19$m=4096,t=3,p=1$dmVrYXNoMTIz$u8L7E2X4G8OQ6Q4Z5X8y2u8L7E2X4G8OQ6Q4Z5X8y2u', id 
+SELECT 'admin@transferlegacy.com', '$argon2id$v=19$m=4096,t=3,p=1$dmVrYXNoMTIz$XTkrALwVGQ4QCmrlpw8C4kvTGTapPhYmDSAs14SjsnY', id 
 FROM ops.roles WHERE name = 'super_admin'
 ON CONFLICT (email) DO NOTHING;
 
