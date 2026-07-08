@@ -127,5 +127,9 @@ fn status_for(err: &AppError) -> StatusCode {
         AppError::OtpExpired => StatusCode::NOT_FOUND,
         AppError::OtpInvalid => StatusCode::UNAUTHORIZED,
         AppError::UserNotFound => StatusCode::NOT_FOUND,
+        AppError::InvalidCredentials => StatusCode::UNAUTHORIZED,
+        AppError::InvalidResetToken => StatusCode::UNAUTHORIZED,
+        AppError::EmailNotVerified => StatusCode::FORBIDDEN,
+        AppError::UserAlreadyExists => StatusCode::CONFLICT,
     }
 }

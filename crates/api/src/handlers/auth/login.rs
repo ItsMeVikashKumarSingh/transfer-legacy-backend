@@ -157,7 +157,7 @@ pub async fn login_finish(
     })?;
 
     opaque_login_finish(server_state, &payload.credential_finalization).map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid)
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::InvalidCredentials, &rid)
     })?;
 
     let record = fetch_opaque_record(&state.db, session.user_id)

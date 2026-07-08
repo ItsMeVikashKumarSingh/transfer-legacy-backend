@@ -21,6 +21,10 @@ pub enum AppError {
     OtpExpired,
     OtpInvalid,
     UserNotFound,
+    InvalidCredentials,
+    InvalidResetToken,
+    EmailNotVerified,
+    UserAlreadyExists,
 }
 
 impl AppError {
@@ -43,6 +47,10 @@ impl AppError {
             AppError::OtpExpired => "ERR_OTP_EXPIRED",
             AppError::OtpInvalid => "ERR_OTP_INVALID",
             AppError::UserNotFound => "ERR_USER_NOT_FOUND",
+            AppError::InvalidCredentials => "ERR_INVALID_CREDENTIALS",
+            AppError::InvalidResetToken => "ERR_INVALID_RESET_TOKEN",
+            AppError::EmailNotVerified => "ERR_EMAIL_NOT_VERIFIED",
+            AppError::UserAlreadyExists => "ERR_USER_ALREADY_EXISTS",
         }
     }
 
@@ -65,6 +73,10 @@ impl AppError {
             AppError::OtpExpired => "Verification code expired or not found. Please request a new code.",
             AppError::OtpInvalid => "Incorrect verification code. Please check and try again.",
             AppError::UserNotFound => "User does not exist.",
+            AppError::InvalidCredentials => "Incorrect email or password. Please try again.",
+            AppError::InvalidResetToken => "The password reset link is invalid or has expired. Please request a new one.",
+            AppError::EmailNotVerified => "Email verification is required before initiating registration.",
+            AppError::UserAlreadyExists => "An account with this email address already exists. Please log in instead.",
         }
     }
 }

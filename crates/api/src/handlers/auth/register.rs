@@ -88,11 +88,11 @@ pub async fn register_init(
         })?;
 
         let cached_token = cached_token.ok_or_else(|| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid)
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::EmailNotVerified, &rid)
         })?;
 
         if cached_token != payload.verification_token {
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::EmailNotVerified, &rid));
         }
 
         // Delete token to prevent reuse
@@ -124,7 +124,7 @@ pub async fn register_init(
 
         if has_opaque {
             // Already registered!
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid));
+            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserAlreadyExists, &rid));
         } else {
             // Incomplete registration, delete the old incomplete user in Supabase Auth Admin API
             crate::services::supabase::delete_user_in_supabase(&config, old_uid).await.map_err(|e| {
@@ -138,7 +138,7 @@ pub async fn register_init(
     crate::services::supabase::register_user_in_supabase(&config, payload.user_id, &credential_identifier).await.map_err(|e| {
         match e {
             crate::services::supabase::SupabaseError::UserAlreadyExists => {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserAlreadyExists, &rid)
             }
             _ => {
                 tracing::error!("Failed to create user in Supabase: {:?}", e);
@@ -346,7 +346,7 @@ pub async fn register_send_otp(
 
         if has_opaque {
             // Already registered!
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid));
+            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserAlreadyExists, &rid));
         }
     }
 

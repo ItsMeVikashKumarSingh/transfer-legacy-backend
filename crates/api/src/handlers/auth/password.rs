@@ -155,7 +155,7 @@ pub async fn password_reset_init(
     .await
     .map_err(|e| {
         tracing::error!("Failed to verify token or reset password in Supabase: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid)
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::InvalidResetToken, &rid)
     })?;
 
     // 2. Initialize OPAQUE registration handshake on the server
