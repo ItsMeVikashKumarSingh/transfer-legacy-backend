@@ -202,28 +202,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         
     let app_routes = Router::new()
         .route("/branding", get(crate::handlers::app::get_branding))
-        .route("/config", get(crate::handlers::app::get_branding))
         .route("/content/:slug", get(crate::handlers::app::get_content))
         .route("/waitlist", post(crate::handlers::app::waitlist_signup))
-        .route("/pages", get(crate::handlers::app::list_pages))
-        .route("/pages/:slug", get(crate::handlers::app::get_page))
         .route("/contact", get(crate::handlers::app::get_contact_config_handler))
-        .route("/contact/message", post(crate::handlers::app::submit_contact_message_handler))
-        .route(
-            "/branding",
-            put(crate::handlers::app::update_branding_handler)
-                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
-        )
-        .route(
-            "/content",
-            put(crate::handlers::app::update_content_handler)
-                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
-        )
-        .route(
-            "/waitlist",
-            get(crate::handlers::app::list_waitlist_entries_handler)
-                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
-        );
+        .route("/contact/message", post(crate::handlers::app::submit_contact_message_handler));
 
     let protected_ops_routes = Router::new()
         .route("/change-password", post(crate::handlers::ops::change_password_handler))

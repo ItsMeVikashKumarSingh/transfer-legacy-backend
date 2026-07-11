@@ -49,10 +49,10 @@ async fn test_admin_routes_unauthorized() {
     let ctx = spawn_app().await;
 
     // Try to list waitlist without token
-    let res = ctx.client.get("/v1/app/waitlist").await;
+    let res = ctx.client.get("/v1/ops/waitlist").await;
     assert_eq!(res.status_code(), axum::http::StatusCode::UNAUTHORIZED);
 
     // Try to update branding without token
-    let res = ctx.client.put("/v1/app/branding").json(&json!({})).await;
+    let res = ctx.client.put("/v1/ops/branding").json(&json!({})).await;
     assert_eq!(res.status_code(), axum::http::StatusCode::UNAUTHORIZED);
 }
