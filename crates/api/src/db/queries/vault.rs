@@ -118,7 +118,7 @@ pub async fn update_item(
     Ok(())
 }
 
-
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_share(
     pool: &PgPool,
     owner_id: Uuid,

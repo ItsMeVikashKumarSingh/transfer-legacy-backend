@@ -2,7 +2,6 @@ use crate::config::Config;
 use handlebars::Handlebars;
 use reqwest::Client;
 use serde::Serialize;
-use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(thiserror::Error, Debug)]
@@ -112,6 +111,7 @@ impl NotificationTemplate {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn from_address(&self) -> &str {
         match self {
             Self::Invite { .. }
@@ -121,8 +121,9 @@ impl NotificationTemplate {
             | Self::ReleaseReady { .. }
             | Self::PasswordReset { .. }
             | Self::OwnerReminder { .. } => "Transfer Legacy <support@transferlegacy.com>",
-            Self::SecurityAlert { .. }
-            | Self::RegisterOtp { .. } => "Transfer Legacy <security@transferlegacy.com>",
+            Self::SecurityAlert { .. } | Self::RegisterOtp { .. } => {
+                "Transfer Legacy <security@transferlegacy.com>"
+            }
             Self::AdminCreated { .. } => "Transfer Legacy Control <security@transferlegacy.com>",
             Self::WaitlistWelcome { .. } => "Transfer Legacy <waitlist@transferlegacy.com>",
         }
@@ -134,24 +135,41 @@ pub async fn send_notification(
     to_email: &str,
     template: NotificationTemplate,
 ) -> Result<(), ResendError> {
-    let mut hb = Handlebars::new();
+    let hb = Handlebars::new();
 
     let template_name = template.template_name();
     let html_content = match template_name.as_str() {
         "admin_created" => include_str!("../../../../docs/templates/admin_created.html"),
-        "approver_attestation_request" => include_str!("../../../../docs/templates/approver_attestation_request.html"),
-        "beneficiary_claim_available" => include_str!("../../../../docs/templates/beneficiary_claim_available.html"),
-        "conflict_hold_notice" => include_str!("../../../../docs/templates/conflict_hold_notice.html"),
+        "approver_attestation_request" => {
+            include_str!("../../../../docs/templates/approver_attestation_request.html")
+        }
+        "beneficiary_claim_available" => {
+            include_str!("../../../../docs/templates/beneficiary_claim_available.html")
+        }
+        "conflict_hold_notice" => {
+            include_str!("../../../../docs/templates/conflict_hold_notice.html")
+        }
         "invite" => include_str!("../../../../docs/templates/invite.html"),
-        "owner_reminder_daily" => include_str!("../../../../docs/templates/owner_reminder_daily.html"),
-        "owner_reminder_early" => include_str!("../../../../docs/templates/owner_reminder_early.html"),
-        "owner_reminder_urgent" => include_str!("../../../../docs/templates/owner_reminder_urgent.html"),
+        "owner_reminder_daily" => {
+            include_str!("../../../../docs/templates/owner_reminder_daily.html")
+        }
+        "owner_reminder_early" => {
+            include_str!("../../../../docs/templates/owner_reminder_early.html")
+        }
+        "owner_reminder_urgent" => {
+            include_str!("../../../../docs/templates/owner_reminder_urgent.html")
+        }
         "password_reset" => include_str!("../../../../docs/templates/password_reset.html"),
         "register_otp" => include_str!("../../../../docs/templates/register_otp.html"),
         "release_ready" => include_str!("../../../../docs/templates/release_ready.html"),
         "security_alert" => include_str!("../../../../docs/templates/security_alert.html"),
         "waitlist_welcome" => include_str!("../../../../docs/templates/waitlist_welcome.html"),
-        _ => return Err(ResendError::Template(format!("Unknown template: {}", template_name))),
+        _ => {
+            return Err(ResendError::Template(format!(
+                "Unknown template: {}",
+                template_name
+            )))
+        }
     };
 
     // Centralized parameters for all emails
@@ -236,7 +254,10 @@ pub async fn send_notification(
             params.insert("admin_email", email.clone());
             params.insert("admin_password", password.clone());
         }
-        NotificationTemplate::WaitlistWelcome { owner_name, position } => {
+        NotificationTemplate::WaitlistWelcome {
+            owner_name,
+            position,
+        } => {
             params.insert("owner_name", owner_name.clone());
             params.insert("position", position.to_string());
         }
@@ -246,7 +267,7 @@ pub async fn send_notification(
     root.insert("params", params);
 
     let rendered_html = hb
-        .render_template(&html_content, &root)
+        .render_template(html_content, &root)
         .map_err(|e| ResendError::Template(format!("Failed to render template: {}", e)))?;
 
     let client = Client::new();
@@ -261,7 +282,11 @@ pub async fn send_notification(
 
     // --- Mock Mode Check ---
     if config.resend_api_key.starts_with("re_mock_") {
-        println!("✉️ MOCK EMAIL LOG: To: {}, Subject: {}", to_email, template.subject());
+        println!(
+            "✉️ MOCK EMAIL LOG: To: {}, Subject: {}",
+            to_email,
+            template.subject()
+        );
         return Ok(());
     }
 

@@ -1,6 +1,6 @@
+pub mod app;
 pub mod audit;
 pub mod auth;
-pub mod app;
 pub mod claims;
 pub mod devices;
 pub mod evidence;

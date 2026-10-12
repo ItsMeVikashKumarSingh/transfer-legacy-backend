@@ -1,14 +1,15 @@
-use axum::{extract::{State, Path}, Json, Extension};
-use uuid::Uuid;
-use tower_http::request_id::RequestId;
-use crate::errors::ApiError;
-use crate::state::AppState;
 use crate::db::queries::ops as ops_queries;
+use crate::errors::ApiError;
 use crate::handlers::ops::auth_utils::{self, Claims};
-use transfer_legacy_shared_types::models::ops::{
-    OpsAdmin, OpsRole, OpsCreateAdminRequest, OpsUpdateAdminRequest
-};
 use crate::notifications::resend::{send_notification, NotificationTemplate};
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    Extension, Json,
+};
+use tower_http::request_id::RequestId;
+use transfer_legacy_shared_types::models::ops::{OpsAdmin, OpsCreateAdminRequest, OpsRole};
+use uuid::Uuid;
 
 pub async fn list_admins_handler(
     State(state): State<AppState>,
@@ -31,26 +32,33 @@ pub async fn create_admin_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
     if claims.role != "super_admin" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Unauthorized,
+            &rid,
+        ));
     }
 
     let password_hash = auth_utils::hash_password(&payload.password).map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    
-    let id = ops_queries::create_admin(&state.db, &payload.email, &password_hash, payload.role_id).await.map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+
+    let id = ops_queries::create_admin(&state.db, &payload.email, &password_hash, payload.role_id)
+        .await
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     ops_queries::log_activity(
-        &state.db, 
-        Some(claims.sub), 
-        "create_admin", 
-        Some("admin"), 
-        Some(&id.to_string()), 
-        Some(serde_json::json!({ "email": payload.email })), 
-        None
-    ).await.ok();
+        &state.db,
+        Some(claims.sub),
+        "create_admin",
+        Some("admin"),
+        Some(&id.to_string()),
+        Some(serde_json::json!({ "email": payload.email })),
+        None,
+    )
+    .await
+    .ok();
 
     // Send welcome email with credentials
     let config = state.config().await;
@@ -61,8 +69,13 @@ pub async fn create_admin_handler(
         if let Err(e) = send_notification(
             &config,
             &email,
-            NotificationTemplate::AdminCreated { email: email.clone(), password }
-        ).await {
+            NotificationTemplate::AdminCreated {
+                email: email.clone(),
+                password,
+            },
+        )
+        .await
+        {
             tracing::error!("Failed to send admin welcome email: {:?}", e);
         }
     });
@@ -79,26 +92,36 @@ pub async fn delete_admin_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
     if claims.sub == admin_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::BadRequest,
+            &rid,
+        ));
     }
 
     if claims.role != "super_admin" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Unauthorized,
+            &rid,
+        ));
     }
 
-    ops_queries::delete_admin(&state.db, admin_id).await.map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
-    
+    ops_queries::delete_admin(&state.db, admin_id)
+        .await
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
     ops_queries::log_activity(
-        &state.db, 
-        Some(claims.sub), 
-        "delete_admin", 
-        Some("admin"), 
-        Some(&admin_id.to_string()), 
-        None, 
-        None
-    ).await.ok();
+        &state.db,
+        Some(claims.sub),
+        "delete_admin",
+        Some("admin"),
+        Some(&admin_id.to_string()),
+        None,
+        None,
+    )
+    .await
+    .ok();
 
     Ok(Json(serde_json::json!({ "status": "deleted" })))
 }
@@ -124,23 +147,35 @@ pub async fn create_role_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
     if claims.role != "super_admin" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Unauthorized,
+            &rid,
+        ));
     }
 
-    let id = ops_queries::create_role(&state.db, &payload.name, payload.description.as_deref(), payload.permissions).await.map_err(|e| {
+    let id = ops_queries::create_role(
+        &state.db,
+        &payload.name,
+        payload.description.as_deref(),
+        payload.permissions,
+    )
+    .await
+    .map_err(|e| {
         tracing::error!("Create role failed: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    
+
     ops_queries::log_activity(
-        &state.db, 
-        Some(claims.sub), 
-        "create_role", 
-        Some("role"), 
-        Some(&id.to_string()), 
-        Some(serde_json::json!({ "name": payload.name })), 
-        None
-    ).await.ok();
+        &state.db,
+        Some(claims.sub),
+        "create_role",
+        Some("role"),
+        Some(&id.to_string()),
+        Some(serde_json::json!({ "name": payload.name })),
+        None,
+    )
+    .await
+    .ok();
 
     Ok(Json(id))
 }
@@ -154,23 +189,30 @@ pub async fn delete_role_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
     if claims.role != "super_admin" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Unauthorized,
+            &rid,
+        ));
     }
 
-    ops_queries::delete_role(&state.db, role_id).await.map_err(|e| {
-        tracing::error!("Delete role failed: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
-    
+    ops_queries::delete_role(&state.db, role_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Delete role failed: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
     ops_queries::log_activity(
-        &state.db, 
-        Some(claims.sub), 
-        "delete_role", 
-        Some("role"), 
-        Some(&role_id.to_string()), 
-        None, 
-        None
-    ).await.ok();
+        &state.db,
+        Some(claims.sub),
+        "delete_role",
+        Some("role"),
+        Some(&role_id.to_string()),
+        None,
+        None,
+    )
+    .await
+    .ok();
 
     Ok(Json(serde_json::json!({ "status": "deleted" })))
 }
@@ -185,29 +227,36 @@ pub async fn update_role_handler(
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
     if claims.role != "super_admin" {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Unauthorized,
+            &rid,
+        ));
     }
 
     ops_queries::update_role(
-        &state.db, 
-        role_id, 
-        &payload.name, 
-        payload.description.as_deref(), 
-        payload.permissions
-    ).await.map_err(|e| {
+        &state.db,
+        role_id,
+        &payload.name,
+        payload.description.as_deref(),
+        payload.permissions,
+    )
+    .await
+    .map_err(|e| {
         tracing::error!("Update role failed: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    
+
     ops_queries::log_activity(
-        &state.db, 
-        Some(claims.sub), 
-        "update_role", 
-        Some("role"), 
-        Some(&role_id.to_string()), 
-        Some(serde_json::json!({ "name": payload.name })), 
-        None
-    ).await.ok();
+        &state.db,
+        Some(claims.sub),
+        "update_role",
+        Some("role"),
+        Some(&role_id.to_string()),
+        Some(serde_json::json!({ "name": payload.name })),
+        None,
+    )
+    .await
+    .ok();
 
     Ok(Json(serde_json::json!({ "status": "updated" })))
 }

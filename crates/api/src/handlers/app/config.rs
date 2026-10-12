@@ -3,9 +3,11 @@ use axum::http::HeaderMap;
 use axum::Json;
 use tower_http::request_id::RequestId;
 
-use crate::db::queries::app::{fetch_branding, update_branding, fetch_contact_config, insert_contact_message};
-use crate::errors::{ApiError, success, SuccessEnvelope};
-use crate::middleware::aead_transport::{wrap_response, AeadResponse, AeadJson};
+use crate::db::queries::app::{
+    fetch_branding, fetch_contact_config, insert_contact_message, update_branding,
+};
+use crate::errors::{success, ApiError, SuccessEnvelope};
+use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::state::AppState;
 use transfer_legacy_shared_types::models::app::{BrandingConfig, ContactConfig, ContactMessage};
 use uuid::Uuid;
@@ -43,7 +45,7 @@ pub async fn update_branding_handler(
         data: "Branding updated successfully".to_string(),
         request_id: rid,
     };
-    
+
     let config_state = state.config().await;
     let aead = wrap_response(&config_state, &headers, &envelope)?;
     Ok(Json(aead))
@@ -75,7 +77,7 @@ pub async fn submit_contact_message_handler(
     Json(payload): Json<PublicContactMessageRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    
+
     let msg = ContactMessage {
         id: Uuid::new_v4(),
         name: payload.name,
@@ -94,4 +96,3 @@ pub async fn submit_contact_message_handler(
 
     Ok(Json(serde_json::json!({ "status": "message_sent" })))
 }
-

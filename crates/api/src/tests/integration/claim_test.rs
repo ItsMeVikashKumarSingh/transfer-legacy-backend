@@ -4,12 +4,14 @@ use transfer_legacy_shared_types::models::auth::{
     LoginFinishRequest, LoginFinishResponse, LoginInitRequest, LoginInitResponse,
     RegisterFinishRequest, RegisterFinishResponse, RegisterInitRequest, RegisterInitResponse,
 };
-use transfer_legacy_shared_types::models::claim::{
-    ClaimConfirmRequest, ClaimConfirmResponse, ClaimInitiateRequest, ClaimInitiateResponse,
-};
 use uuid::Uuid;
 
-async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, email: &str, password: &str) -> String {
+async fn get_auth_token(
+    client: &mut CryptoClient,
+    user_id: Uuid,
+    email: &str,
+    password: &str,
+) -> String {
     // 1. Registration Init
     let (reg_state, reg_req) = crate::tests::test_utils::test_client_register_init(password);
     let reg_init_req = RegisterInitRequest {

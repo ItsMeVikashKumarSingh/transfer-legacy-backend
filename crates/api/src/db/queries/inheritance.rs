@@ -23,6 +23,7 @@ pub struct PolicyRow {
     pub enc_owner_name: Option<Vec<u8>>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_policy_tx(
     tx: &mut Transaction<'_, Postgres>,
     owner_id: Uuid,
@@ -65,6 +66,7 @@ pub async fn insert_policy_tx(
     Ok(policy_id)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_policy_tx(
     tx: &mut Transaction<'_, Postgres>,
     policy_id: Uuid,
@@ -230,7 +232,10 @@ pub async fn update_policy_participants(
     Ok(())
 }
 
-pub async fn fetch_policy_by_owner(pool: &PgPool, owner_id: Uuid) -> Result<PolicyRow, sqlx::Error> {
+pub async fn fetch_policy_by_owner(
+    pool: &PgPool,
+    owner_id: Uuid,
+) -> Result<PolicyRow, sqlx::Error> {
     let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<Value>, Value, Value, Option<Value>, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<Vec<u8>>, Option<String>, Option<Vec<u8>>)>(
         r#"SELECT 
             p.policy_id, p.owner_id, p.policy_type::text, p.cadence::text, p.m_of_n, p.beneficiaries, p.approvers, p.release_conditions, p.status::text, p.last_heartbeat_at, p.pending_at, p.grace_deadline, p.conflict_hold_until, p.audit_head_hash, p.label, per.enc_legal_name
@@ -262,4 +267,3 @@ pub async fn fetch_policy_by_owner(pool: &PgPool, owner_id: Uuid) -> Result<Poli
         enc_owner_name: row.15,
     })
 }
-

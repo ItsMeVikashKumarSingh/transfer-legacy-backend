@@ -4,8 +4,8 @@ use axum::Json;
 use tower_http::request_id::RequestId;
 
 use crate::db::queries::app::{fetch_app_content, update_app_content};
-use crate::errors::{ApiError, success, SuccessEnvelope};
-use crate::middleware::aead_transport::{wrap_response, AeadResponse, AeadJson};
+use crate::errors::{success, ApiError, SuccessEnvelope};
+use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::state::AppState;
 use transfer_legacy_shared_types::models::app::AppContent;
 
@@ -36,8 +36,13 @@ pub async fn update_content_handler(
 
     crate::middleware::internal_auth::ensure_internal_access(&state, &headers)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid))?;
-    
+        .map_err(|_| {
+            ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Unauthorized,
+                &rid,
+            )
+        })?;
+
     update_app_content(&state.db, content).await.map_err(|e| {
         tracing::error!("Failed to update app content: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
@@ -47,7 +52,7 @@ pub async fn update_content_handler(
         data: "Content updated successfully".to_string(),
         request_id: rid,
     };
-    
+
     let config_state = state.config().await;
     let aead = wrap_response(&config_state, &headers, &envelope)?;
     Ok(Json(aead))

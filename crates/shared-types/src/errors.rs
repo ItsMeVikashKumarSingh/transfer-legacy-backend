@@ -58,7 +58,9 @@ impl AppError {
         match self {
             AppError::BadRequest => "The request is invalid or could not be understood.",
             AppError::Unauthorized => "Authentication is failed or required.",
-            AppError::Forbidden => "Access denied. You do not have permission to perform this action.",
+            AppError::Forbidden => {
+                "Access denied. You do not have permission to perform this action."
+            }
             AppError::NotFound => "The requested resource could not be found.",
             AppError::Conflict => "A resource conflict occurred (e.g. data already exists).",
             AppError::RateLimited => "Too many requests. Please wait and try again later.",
@@ -67,16 +69,30 @@ impl AppError {
             AppError::ReplayDetected => "Request rejected: potential replay attack detected.",
             AppError::ReplayOrSkew => "Request timestamp is invalid or has expired.",
             AppError::SignatureInvalid => "Cryptographic signature verification failed.",
-            AppError::EnvelopeRecipientMismatch => "Recipient identifier does not match the envelope destination.",
-            AppError::CryptoVersionUnsupported => "The requested cryptographic protocol version is not supported.",
-            AppError::DualSignatureRequired => "This action requires dual operator approval signatures.",
-            AppError::OtpExpired => "Verification code expired or not found. Please request a new code.",
+            AppError::EnvelopeRecipientMismatch => {
+                "Recipient identifier does not match the envelope destination."
+            }
+            AppError::CryptoVersionUnsupported => {
+                "The requested cryptographic protocol version is not supported."
+            }
+            AppError::DualSignatureRequired => {
+                "This action requires dual operator approval signatures."
+            }
+            AppError::OtpExpired => {
+                "Verification code expired or not found. Please request a new code."
+            }
             AppError::OtpInvalid => "Incorrect verification code. Please check and try again.",
             AppError::UserNotFound => "User does not exist.",
             AppError::InvalidCredentials => "Incorrect email or password. Please try again.",
-            AppError::InvalidResetToken => "The password reset link is invalid or has expired. Please request a new one.",
-            AppError::EmailNotVerified => "Email verification is required before initiating registration.",
-            AppError::UserAlreadyExists => "An account with this email address already exists. Please log in instead.",
+            AppError::InvalidResetToken => {
+                "The password reset link is invalid or has expired. Please request a new one."
+            }
+            AppError::EmailNotVerified => {
+                "Email verification is required before initiating registration."
+            }
+            AppError::UserAlreadyExists => {
+                "An account with this email address already exists. Please log in instead."
+            }
         }
     }
 }

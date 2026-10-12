@@ -19,10 +19,17 @@ pub async fn require_idempotency(state: &AppState, headers: &HeaderMap) -> Resul
     let set: bool = match set_res {
         Ok(val) => Ok(val),
         Err(e) => {
-            tracing::warn!("require_idempotency: Redis set_nx failed, retrying once. Error: {:?}", e);
+            tracing::warn!(
+                "require_idempotency: Redis set_nx failed, retrying once. Error: {:?}",
+                e
+            );
             let mut retry_conn = state.redis_conn.clone();
             retry_conn.set_nx(&redis_key, 1).await.map_err(|err| {
-                tracing::error!("require_idempotency: Redis set_nx retry failed for key '{}': {:?}", redis_key, err);
+                tracing::error!(
+                    "require_idempotency: Redis set_nx retry failed for key '{}': {:?}",
+                    redis_key,
+                    err
+                );
                 ApiError::app(AppError::Internal)
             })
         }
@@ -36,10 +43,17 @@ pub async fn require_idempotency(state: &AppState, headers: &HeaderMap) -> Resul
     let _: () = match exp_res {
         Ok(_) => Ok(()),
         Err(e) => {
-            tracing::warn!("require_idempotency: Redis expire failed, retrying once. Error: {:?}", e);
+            tracing::warn!(
+                "require_idempotency: Redis expire failed, retrying once. Error: {:?}",
+                e
+            );
             let mut retry_conn = state.redis_conn.clone();
             retry_conn.expire(&redis_key, 86400).await.map_err(|err| {
-                tracing::error!("require_idempotency: Redis expire retry failed for key '{}': {:?}", redis_key, err);
+                tracing::error!(
+                    "require_idempotency: Redis expire retry failed for key '{}': {:?}",
+                    redis_key,
+                    err
+                );
                 ApiError::app(AppError::Internal)
             })
         }
@@ -60,10 +74,17 @@ pub async fn enforce_rate_limit(
     let count: u64 = match incr_res {
         Ok(val) => Ok(val),
         Err(e) => {
-            tracing::warn!("enforce_rate_limit: Redis incr failed, retrying once. Error: {:?}", e);
+            tracing::warn!(
+                "enforce_rate_limit: Redis incr failed, retrying once. Error: {:?}",
+                e
+            );
             let mut retry_conn = state.redis_conn.clone();
             retry_conn.incr(&redis_key, 1).await.map_err(|err| {
-                tracing::error!("enforce_rate_limit: Redis incr retry failed for key '{}': {:?}", redis_key, err);
+                tracing::error!(
+                    "enforce_rate_limit: Redis incr retry failed for key '{}': {:?}",
+                    redis_key,
+                    err
+                );
                 ApiError::app(AppError::Internal)
             })
         }
@@ -74,10 +95,17 @@ pub async fn enforce_rate_limit(
         let _: () = match exp_res {
             Ok(_) => Ok(()),
             Err(e) => {
-                tracing::warn!("enforce_rate_limit: Redis expire failed, retrying once. Error: {:?}", e);
+                tracing::warn!(
+                    "enforce_rate_limit: Redis expire failed, retrying once. Error: {:?}",
+                    e
+                );
                 let mut retry_conn = state.redis_conn.clone();
                 retry_conn.expire(&redis_key, 60).await.map_err(|err| {
-                    tracing::error!("enforce_rate_limit: Redis expire retry failed for key '{}': {:?}", redis_key, err);
+                    tracing::error!(
+                        "enforce_rate_limit: Redis expire retry failed for key '{}': {:?}",
+                        redis_key,
+                        err
+                    );
                     ApiError::app(AppError::Internal)
                 })
             }

@@ -1,4 +1,2 @@
 #[test]
-fn audit_routes_smoke() {
-    assert!(true);
-}
+fn audit_routes_smoke() {}

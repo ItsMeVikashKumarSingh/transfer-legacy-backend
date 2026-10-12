@@ -1,5 +1,8 @@
-use sqlx::{Postgres, Pool};
-use transfer_legacy_shared_types::models::app::{BrandingConfig, AppContent, WaitlistEntry, WaitlistSignupRequest, ContactConfig, ContactMessage, CmsPage};
+use sqlx::{Pool, Postgres};
+use transfer_legacy_shared_types::models::app::{
+    AppContent, BrandingConfig, CmsPage, ContactConfig, ContactMessage, WaitlistEntry,
+    WaitlistSignupRequest,
+};
 use uuid::Uuid;
 
 pub async fn fetch_branding(pool: &Pool<Postgres>) -> Result<BrandingConfig, sqlx::Error> {
@@ -101,7 +104,9 @@ pub async fn insert_contact_message(
     Ok(row.get::<Uuid, _>("id"))
 }
 
-pub async fn list_contact_messages(pool: &Pool<Postgres>) -> Result<Vec<ContactMessage>, sqlx::Error> {
+pub async fn list_contact_messages(
+    pool: &Pool<Postgres>,
+) -> Result<Vec<ContactMessage>, sqlx::Error> {
     use sqlx::Row;
     let rows = sqlx::query(
         "SELECT id, name, email, subject, message, metadata, is_read, created_at FROM app.contact_messages ORDER BY created_at DESC",
@@ -109,16 +114,19 @@ pub async fn list_contact_messages(pool: &Pool<Postgres>) -> Result<Vec<ContactM
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| ContactMessage {
-        id: r.get("id"),
-        name: r.get("name"),
-        email: r.get("email"),
-        subject: r.get("subject"),
-        message: r.get("message"),
-        metadata: r.get("metadata"),
-        is_read: r.get("is_read"),
-        created_at: r.get("created_at"),
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| ContactMessage {
+            id: r.get("id"),
+            name: r.get("name"),
+            email: r.get("email"),
+            subject: r.get("subject"),
+            message: r.get("message"),
+            metadata: r.get("metadata"),
+            is_read: r.get("is_read"),
+            created_at: r.get("created_at"),
+        })
+        .collect())
 }
 
 pub async fn delete_contact_message(pool: &Pool<Postgres>, id: Uuid) -> Result<(), sqlx::Error> {
@@ -129,7 +137,10 @@ pub async fn delete_contact_message(pool: &Pool<Postgres>, id: Uuid) -> Result<(
     Ok(())
 }
 
-pub async fn fetch_app_content(pool: &Pool<Postgres>, slug: &str) -> Result<AppContent, sqlx::Error> {
+pub async fn fetch_app_content(
+    pool: &Pool<Postgres>,
+    slug: &str,
+) -> Result<AppContent, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
         "SELECT slug, body, version FROM app.content WHERE slug = $1 AND is_deleted = false",
@@ -166,7 +177,7 @@ pub async fn insert_waitlist_signup(
     req: WaitlistSignupRequest,
 ) -> Result<(Uuid, i64, bool), sqlx::Error> {
     use sqlx::Row;
-    
+
     // 1. Try to insert or update
     let row = sqlx::query(
         "INSERT INTO app.waitlist (email, name, meta) VALUES ($1, $2, $3) 
@@ -196,7 +207,9 @@ pub async fn insert_waitlist_signup(
     Ok((id, position, is_new))
 }
 
-pub async fn list_waitlist_entries(pool: &Pool<Postgres>) -> Result<Vec<WaitlistEntry>, sqlx::Error> {
+pub async fn list_waitlist_entries(
+    pool: &Pool<Postgres>,
+) -> Result<Vec<WaitlistEntry>, sqlx::Error> {
     use sqlx::Row;
     let rows = sqlx::query(
         "SELECT id, email, name, meta, created_at FROM app.waitlist WHERE is_deleted = false ORDER BY created_at DESC",
@@ -218,41 +231,51 @@ pub async fn list_waitlist_entries(pool: &Pool<Postgres>) -> Result<Vec<Waitlist
     Ok(entries)
 }
 
-pub async fn list_cms_pages(pool: &Pool<Postgres>, only_published: bool) -> Result<Vec<CmsPage>, sqlx::Error> {
+pub async fn list_cms_pages(
+    pool: &Pool<Postgres>,
+    only_published: bool,
+) -> Result<Vec<CmsPage>, sqlx::Error> {
     use sqlx::Row;
     let query = if only_published {
         "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE is_published = true ORDER BY updated_at DESC"
     } else {
         "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages ORDER BY updated_at DESC"
     };
-    
+
     let rows = sqlx::query(query).fetch_all(pool).await?;
-    
-    Ok(rows.into_iter().map(|r| CmsPage {
-        id: r.get("id"),
-        title: r.get("title"),
-        slug: r.get("slug"),
-        description: r.get("description"),
-        category: r.get("category"),
-        body: r.get("body"),
-        is_published: r.get("is_published"),
-        seo_meta: r.get("seo_meta"),
-        updated_by: r.get("updated_by"),
-        created_at: r.get("created_at"),
-        updated_at: r.get("updated_at"),
-    }).collect())
+
+    Ok(rows
+        .into_iter()
+        .map(|r| CmsPage {
+            id: r.get("id"),
+            title: r.get("title"),
+            slug: r.get("slug"),
+            description: r.get("description"),
+            category: r.get("category"),
+            body: r.get("body"),
+            is_published: r.get("is_published"),
+            seo_meta: r.get("seo_meta"),
+            updated_by: r.get("updated_by"),
+            created_at: r.get("created_at"),
+            updated_at: r.get("updated_at"),
+        })
+        .collect())
 }
 
-pub async fn fetch_cms_page_by_slug(pool: &Pool<Postgres>, slug: &str, only_published: bool) -> Result<CmsPage, sqlx::Error> {
+pub async fn fetch_cms_page_by_slug(
+    pool: &Pool<Postgres>,
+    slug: &str,
+    only_published: bool,
+) -> Result<CmsPage, sqlx::Error> {
     use sqlx::Row;
     let query = if only_published {
         "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE slug = $1 AND is_published = true"
     } else {
         "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE slug = $1"
     };
-    
+
     let row = sqlx::query(query).bind(slug).fetch_one(pool).await?;
-    
+
     Ok(CmsPage {
         id: row.get("id"),
         title: row.get("title"),
@@ -293,7 +316,7 @@ pub async fn upsert_cms_page(pool: &Pool<Postgres>, page: CmsPage) -> Result<(),
     .bind(page.updated_by)
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 

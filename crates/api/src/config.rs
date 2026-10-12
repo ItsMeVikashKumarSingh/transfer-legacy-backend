@@ -33,6 +33,7 @@ impl From<&str> for Environment {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Config {
     pub environment: Environment,
     pub bind_addr: String,
@@ -106,11 +107,20 @@ pub struct OpenBaoSecrets {
     pub backblaze_b2_app_key: String,
     #[serde(alias = "B2_BUCKET_NAME", alias = "BACKBLAZE_B2_BUCKET_NAME")]
     pub backblaze_b2_bucket_name: String,
-    #[serde(alias = "B2_PUBLIC_ASSETS_BUCKET_NAME", alias = "BACKBLAZE_B2_PUBLIC_ASSETS_BUCKET_NAME")]
+    #[serde(
+        alias = "B2_PUBLIC_ASSETS_BUCKET_NAME",
+        alias = "BACKBLAZE_B2_PUBLIC_ASSETS_BUCKET_NAME"
+    )]
     pub backblaze_b2_public_assets_bucket_name: String,
-    #[serde(alias = "B2_AUDIT_BUCKET_NAME", alias = "BACKBLAZE_B2_AUDIT_BUCKET_NAME")]
+    #[serde(
+        alias = "B2_AUDIT_BUCKET_NAME",
+        alias = "BACKBLAZE_B2_AUDIT_BUCKET_NAME"
+    )]
     pub backblaze_b2_audit_bucket_name: String,
-    #[serde(alias = "B2_BACKUP_BUCKET_NAME", alias = "BACKBLAZE_B2_BACKUP_BUCKET_NAME")]
+    #[serde(
+        alias = "B2_BACKUP_BUCKET_NAME",
+        alias = "BACKBLAZE_B2_BACKUP_BUCKET_NAME"
+    )]
     pub backblaze_b2_backup_bucket_name: String,
     #[serde(alias = "B2_ENDPOINT_URL", alias = "BACKBLAZE_B2_ENDPOINT_URL")]
     pub backblaze_b2_endpoint_url: String,
@@ -153,8 +163,8 @@ impl Config {
 
         let openbao_addr =
             env::var("OPENBAO_ADDR").map_err(|_| ConfigError::MissingVar("OPENBAO_ADDR"))?;
-        let bao_path = env::var("BAO_PATH")
-            .unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string());
+        let bao_path =
+            env::var("BAO_PATH").unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string());
         let role_id = env::var("ROLE_ID").map_err(|_| ConfigError::MissingVar("ROLE_ID"))?;
         let secret_id = env::var("SECRET_ID").map_err(|_| ConfigError::MissingVar("SECRET_ID"))?;
 
@@ -227,8 +237,14 @@ impl Config {
             vec![ax_http_header::from_str(s.app_url.trim()).unwrap()]
         };
 
-        tracing::info!("Config loaded from OpenBao. AEAD Key Hash: {}", hash_value(s.server_aead_key.trim()));
-        println!("🚀 [DIAGNOSTIC] Config loaded from OpenBao. AEAD Key Hash: {}", hash_value(s.server_aead_key.trim()));
+        tracing::info!(
+            "Config loaded from OpenBao. AEAD Key Hash: {}",
+            hash_value(s.server_aead_key.trim())
+        );
+        println!(
+            "🚀 [DIAGNOSTIC] Config loaded from OpenBao. AEAD Key Hash: {}",
+            hash_value(s.server_aead_key.trim())
+        );
 
         Ok(Self {
             environment,
@@ -247,7 +263,10 @@ impl Config {
             b2_key_id: s.backblaze_b2_key_id.trim().to_string(),
             b2_app_key: s.backblaze_b2_app_key.trim().to_string(),
             b2_bucket_name: s.backblaze_b2_bucket_name.trim().to_string(),
-            b2_public_assets_bucket_name: s.backblaze_b2_public_assets_bucket_name.trim().to_string(),
+            b2_public_assets_bucket_name: s
+                .backblaze_b2_public_assets_bucket_name
+                .trim()
+                .to_string(),
             b2_audit_bucket_name: s.backblaze_b2_audit_bucket_name.trim().to_string(),
             b2_backup_bucket_name: s.backblaze_b2_backup_bucket_name.trim().to_string(),
             b2_endpoint_url: s.backblaze_b2_endpoint_url.trim().to_string(),
@@ -260,11 +279,17 @@ impl Config {
             server_hmac_secret: s.server_hmac_secret.trim().to_string(),
             resend_api_key: s.resend_api_key.trim().to_string(),
             owner_email: s.owner_email.trim().to_string(),
-            ops_admin_email: s.ops_admin_email.unwrap_or_else(|| "admin@transferlegacy.com".to_string()).trim().to_string(),
+            ops_admin_email: s
+                .ops_admin_email
+                .unwrap_or_else(|| "admin@transferlegacy.com".to_string())
+                .trim()
+                .to_string(),
             ops_admin_password: s.ops_admin_password.unwrap_or_default().trim().to_string(),
             tl_serverless: false,
             server_private_key_b64: None,
-            tl_cron_secret: std::env::var("TL_CRON_SECRET").ok().map(|s| s.trim().to_string()),
+            tl_cron_secret: std::env::var("TL_CRON_SECRET")
+                .ok()
+                .map(|s| s.trim().to_string()),
         })
     }
 
@@ -273,7 +298,9 @@ impl Config {
         dotenvy::dotenv().ok();
 
         let bind_addr = env::var("TL_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0".to_string());
-        let port_str = env::var("TL_PORT").or_else(|_| env::var("PORT")).unwrap_or_else(|_| "8080".to_string());
+        let port_str = env::var("TL_PORT")
+            .or_else(|_| env::var("PORT"))
+            .unwrap_or_else(|_| "8080".to_string());
         let port = port_str
             .parse::<u16>()
             .map_err(|_| ConfigError::InvalidPort(port_str))?;
@@ -281,8 +308,14 @@ impl Config {
         let tl_env_str = env::var("TL_ENV").unwrap_or_else(|_| "local".to_string());
         let environment = Environment::from(tl_env_str.as_str());
 
-        let app_url = env::var("TL_APP_URL").or_else(|_| env::var("APP_URL")).unwrap_or_else(|_| "http://localhost:3000".to_string()).trim().to_string();
-        let allowed_origins = if let Ok(origins_str) = env::var("TL_ALLOWED_ORIGINS").or_else(|_| env::var("ALLOWED_ORIGINS")) {
+        let app_url = env::var("TL_APP_URL")
+            .or_else(|_| env::var("APP_URL"))
+            .unwrap_or_else(|_| "http://localhost:3000".to_string())
+            .trim()
+            .to_string();
+        let allowed_origins = if let Ok(origins_str) =
+            env::var("TL_ALLOWED_ORIGINS").or_else(|_| env::var("ALLOWED_ORIGINS"))
+        {
             origins_str
                 .split(',')
                 .map(|s| s.trim())
@@ -292,7 +325,7 @@ impl Config {
         } else {
             vec![ax_http_header::from_str(&app_url).unwrap()]
         };
-        
+
         let aead_key = env::var("TL_SERVER_AEAD_KEY_B64")
             .or_else(|_| env::var("SERVER_AEAD_KEY_B64"))
             .or_else(|_| env::var("SERVER_AEAD_KEY"))
@@ -300,13 +333,18 @@ impl Config {
             .trim()
             .to_string();
 
-        let tl_serverless = env::var("TL_SERVERLESS").unwrap_or_else(|_| "true".to_string()) != "false";
+        let tl_serverless =
+            env::var("TL_SERVERLESS").unwrap_or_else(|_| "true".to_string()) != "false";
         let server_private_key_b64 = env::var("TL_SERVER_PRIVATE_KEY_B64")
             .or_else(|_| env::var("SERVER_PRIVATE_KEY_B64"))
             .ok()
             .map(|k| k.trim().to_string());
 
-        tracing::info!("Config loaded from Env. AEAD Key Hash: {}, TL_SERVERLESS: {}", hash_value(&aead_key), tl_serverless);
+        tracing::info!(
+            "Config loaded from Env. AEAD Key Hash: {}, TL_SERVERLESS: {}",
+            hash_value(&aead_key),
+            tl_serverless
+        );
 
         Ok(Self {
             environment,
@@ -314,29 +352,58 @@ impl Config {
             port,
             allowed_origins,
             app_url,
-            brand_name: env::var("TL_BRAND_NAME").or_else(|_| env::var("BRAND_NAME")).unwrap_or_else(|_| "Transfer Legacy".into()).trim().to_string(),
-            internal_api_token: env::var("TL_INTERNAL_API_TOKEN").or_else(|_| env::var("INTERNAL_API_TOKEN")).ok().map(|t| t.trim().to_string()),
+            brand_name: env::var("TL_BRAND_NAME")
+                .or_else(|_| env::var("BRAND_NAME"))
+                .unwrap_or_else(|_| "Transfer Legacy".into())
+                .trim()
+                .to_string(),
+            internal_api_token: env::var("TL_INTERNAL_API_TOKEN")
+                .or_else(|_| env::var("INTERNAL_API_TOKEN"))
+                .ok()
+                .map(|t| t.trim().to_string()),
             database_url: env::var("DATABASE_URL")
                 .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?
                 .trim()
                 .to_string(),
-            redis_url: env::var("REDIS_URL").map_err(|_| ConfigError::MissingVar("REDIS_URL"))?
+            redis_url: env::var("REDIS_URL")
+                .map_err(|_| ConfigError::MissingVar("REDIS_URL"))?
                 .trim()
                 .to_string(),
             bao_path: env::var("BAO_PATH")
                 .unwrap_or_else(|_| "secret/data/transfer-legacy/prod".to_string())
                 .trim()
                 .to_string(),
-            openbao_addr: env::var("OPENBAO_ADDR").unwrap_or_default().trim().to_string(),
+            openbao_addr: env::var("OPENBAO_ADDR")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
             openbao_token: "".to_string(),
             openbao_version: 0,
             b2_key_id: env::var("B2_KEY_ID").unwrap_or_default().trim().to_string(),
-            b2_app_key: env::var("B2_APP_KEY").unwrap_or_default().trim().to_string(),
-            b2_bucket_name: env::var("B2_BUCKET_NAME").unwrap_or_default().trim().to_string(),
-            b2_public_assets_bucket_name: env::var("B2_PUBLIC_ASSETS_BUCKET_NAME").unwrap_or_default().trim().to_string(),
-            b2_audit_bucket_name: env::var("B2_AUDIT_BUCKET_NAME").unwrap_or_default().trim().to_string(),
-            b2_backup_bucket_name: env::var("B2_BACKUP_BUCKET_NAME").unwrap_or_default().trim().to_string(),
-            b2_endpoint_url: env::var("B2_ENDPOINT_URL").unwrap_or_default().trim().to_string(),
+            b2_app_key: env::var("B2_APP_KEY")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
+            b2_bucket_name: env::var("B2_BUCKET_NAME")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
+            b2_public_assets_bucket_name: env::var("B2_PUBLIC_ASSETS_BUCKET_NAME")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
+            b2_audit_bucket_name: env::var("B2_AUDIT_BUCKET_NAME")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
+            b2_backup_bucket_name: env::var("B2_BACKUP_BUCKET_NAME")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
+            b2_endpoint_url: env::var("B2_ENDPOINT_URL")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
             server_aead_key_b64: aead_key,
             opaque_server_setup_b64: env::var("OPAQUE_SERVER_SETUP_B64")
                 .or_else(|_| env::var("OPAQUE_SERVER_SETUP"))
@@ -367,15 +434,27 @@ impl Config {
                 .map_err(|_| ConfigError::MissingVar("RESEND_API_KEY"))?
                 .trim()
                 .to_string(),
-            owner_email: env::var("OWNER_EMAIL").unwrap_or_default().trim().to_string(),
-            ops_admin_email: env::var("OPS_ADMIN_EMAIL").unwrap_or_else(|_| "admin@transferlegacy.com".to_string()).trim().to_string(),
-            ops_admin_password: env::var("OPS_ADMIN_PASSWORD").unwrap_or_default().trim().to_string(),
+            owner_email: env::var("OWNER_EMAIL")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
+            ops_admin_email: env::var("OPS_ADMIN_EMAIL")
+                .unwrap_or_else(|_| "admin@transferlegacy.com".to_string())
+                .trim()
+                .to_string(),
+            ops_admin_password: env::var("OPS_ADMIN_PASSWORD")
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
             tl_serverless,
             server_private_key_b64,
-            tl_cron_secret: env::var("TL_CRON_SECRET").ok().map(|s| s.trim().to_string()),
+            tl_cron_secret: env::var("TL_CRON_SECRET")
+                .ok()
+                .map(|s| s.trim().to_string()),
         })
     }
 
+    #[allow(dead_code)]
     pub fn calculate_diff(&self, new: &Self) -> String {
         let mut diff = Vec::new();
 
@@ -447,6 +526,7 @@ fn hash_value(val: &str) -> String {
     hex::encode(&hasher.finalize()[..4])
 }
 
+#[allow(dead_code)]
 fn mask_url(url: &str) -> String {
     if let Some(at) = url.find('@') {
         if let Some(start) = url.find("://") {

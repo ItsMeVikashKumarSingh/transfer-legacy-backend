@@ -5,6 +5,6 @@ mod claim_test;
 mod full_stack_notification_test;
 mod inheritance_test;
 mod ops_auth_test;
+mod prune_user;
 mod release_test;
 mod vault_test;
-mod prune_user;

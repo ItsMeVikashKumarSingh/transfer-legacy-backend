@@ -1,4 +1,2 @@
 #[test]
-fn release_routes_smoke() {
-    assert!(true);
-}
+fn release_routes_smoke() {}

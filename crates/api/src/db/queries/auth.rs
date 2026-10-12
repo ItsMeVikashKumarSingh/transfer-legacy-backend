@@ -127,7 +127,10 @@ pub struct UserKeysRow {
     pub kyber768_pubkey: Vec<u8>,
 }
 
-pub async fn fetch_user_keys_by_email(pool: &PgPool, email: &str) -> Result<UserKeysRow, sqlx::Error> {
+pub async fn fetch_user_keys_by_email(
+    pool: &PgPool,
+    email: &str,
+) -> Result<UserKeysRow, sqlx::Error> {
     let row = sqlx::query_as::<_, (Uuid, Vec<u8>, Vec<u8>)>(
         r#"SELECT user_id, x25519_pubkey, kyber768_pubkey 
         FROM auth_ext.opaque_records 
@@ -143,5 +146,3 @@ pub async fn fetch_user_keys_by_email(pool: &PgPool, email: &str) -> Result<User
         kyber768_pubkey: row.2,
     })
 }
-
-

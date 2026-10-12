@@ -2,7 +2,6 @@ use axum::extract::{Extension, State};
 use axum::{http::HeaderMap, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{Rng, RngCore};
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -62,9 +61,9 @@ pub async fn register_init(
     AeadJson(payload): AeadJson<RegisterInitRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    
+
     require_idempotency(&state, &headers).await?;
-    
+
     let rate_key = format!("register_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10).await?;
 
@@ -81,69 +80,103 @@ pub async fn register_init(
 
     if !bypass_otp {
         let verify_key = format!("verified:email:{}", credential_identifier);
-        
+
         let cached_token: Option<String> = state.redis_get(&verify_key).await.map_err(|e| {
             tracing::error!("Failed to fetch verification token from Redis: {:?}", e);
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
 
         let cached_token = cached_token.ok_or_else(|| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::EmailNotVerified, &rid)
+            ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::EmailNotVerified,
+                &rid,
+            )
         })?;
 
         if cached_token != payload.verification_token {
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::EmailNotVerified, &rid));
+            return Err(ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::EmailNotVerified,
+                &rid,
+            ));
         }
 
         // Delete token to prevent reuse
-        let _: () = state.redis_del(&verify_key).await.map_err(|e| {
-            tracing::warn!("Failed to delete registration verification token: {:?}", e);
-        }).unwrap_or_default();
+        let _: () = state
+            .redis_del(&verify_key)
+            .await
+            .map_err(|e| {
+                tracing::warn!("Failed to delete registration verification token: {:?}", e);
+            })
+            .unwrap_or_default();
     }
 
     // Check if the user email already exists in auth.users
-    let existing_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM auth.users WHERE email = $1")
-        .bind(&credential_identifier)
-        .fetch_optional(state.db())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to check existing email in auth.users: {:?}", e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let existing_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM auth.users WHERE email = $1")
+            .bind(&credential_identifier)
+            .fetch_optional(state.db())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to check existing email in auth.users: {:?}", e);
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     if let Some(old_uid) = existing_id {
         // Check if a completed OPAQUE record exists for this user ID
-        let has_opaque: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM auth_ext.opaque_records WHERE user_id = $1)")
-            .bind(old_uid)
-            .fetch_one(state.db())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to check existing opaque record: {:?}", e);
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-            })?;
+        let has_opaque: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM auth_ext.opaque_records WHERE user_id = $1)",
+        )
+        .bind(old_uid)
+        .fetch_one(state.db())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check existing opaque record: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
         if has_opaque {
             // Already registered!
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserAlreadyExists, &rid));
+            return Err(ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::UserAlreadyExists,
+                &rid,
+            ));
         } else {
             // Incomplete registration, delete the old incomplete user in Supabase Auth Admin API
-            crate::services::supabase::delete_user_in_supabase(&config, old_uid).await.map_err(|e| {
-                tracing::error!("Failed to delete incomplete registration in Supabase: {:?}", e);
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-            })?;
+            crate::services::supabase::delete_user_in_supabase(&config, old_uid)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        "Failed to delete incomplete registration in Supabase: {:?}",
+                        e
+                    );
+                    ApiError::app_with_request_id(
+                        transfer_legacy_shared_types::AppError::Internal,
+                        &rid,
+                    )
+                })?;
         }
     }
 
     // Now insert the new user record safely via Supabase Auth Admin API to satisfy foreign key constraints
-    crate::services::supabase::register_user_in_supabase(&config, payload.user_id, &credential_identifier).await.map_err(|e| {
-        match e {
-            crate::services::supabase::SupabaseError::UserAlreadyExists => {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserAlreadyExists, &rid)
-            }
-            _ => {
-                tracing::error!("Failed to create user in Supabase: {:?}", e);
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-            }
+    crate::services::supabase::register_user_in_supabase(
+        &config,
+        payload.user_id,
+        &credential_identifier,
+    )
+    .await
+    .map_err(|e| match e {
+        crate::services::supabase::SupabaseError::UserAlreadyExists => {
+            ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::UserAlreadyExists,
+                &rid,
+            )
+        }
+        _ => {
+            tracing::error!("Failed to create user in Supabase: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         }
     })?;
 
@@ -166,9 +199,13 @@ pub async fn register_init(
         tracing::error!("register_init: Failed to serialize OPAQUE session: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    
+
     state.redis_set_ex(&key, &value, 300).await.map_err(|err| {
-        tracing::error!("register_init: Redis set_ex failed for key '{}': {:?}", key, err);
+        tracing::error!(
+            "register_init: Redis set_ex failed for key '{}': {:?}",
+            key,
+            err
+        );
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
@@ -247,7 +284,10 @@ pub async fn register_finish(
             tracing::error!("Failed to insert person and link: {:?}", e);
             if let sqlx::Error::Database(ref db_err) = e {
                 if db_err.code().as_deref() == Some("23505") {
-                    return ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid);
+                    return ApiError::app_with_request_id(
+                        transfer_legacy_shared_types::AppError::Conflict,
+                        &rid,
+                    );
                 }
             }
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
@@ -268,7 +308,10 @@ pub async fn register_finish(
         tracing::error!("Failed to insert opaque record: {:?}", e);
         if let sqlx::Error::Database(ref db_err) = e {
             if db_err.code().as_deref() == Some("23505") {
-                return ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid);
+                return ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Conflict,
+                    &rid,
+                );
             }
         }
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
@@ -319,53 +362,70 @@ pub async fn register_send_otp(
 ) -> Result<Json<SuccessEnvelope<SendOtpResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     require_idempotency(&state, &headers).await?;
-    
+
     let rate_key = format!("otp_send:{}", payload.email);
     enforce_rate_limit(&state, &rate_key, 5).await?;
 
     // Check if the user email already exists in auth.users
-    let existing_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM auth.users WHERE email = $1")
-        .bind(&payload.email)
-        .fetch_optional(state.db())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to check existing email in auth.users during OTP: {:?}", e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let existing_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM auth.users WHERE email = $1")
+            .bind(&payload.email)
+            .fetch_optional(state.db())
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to check existing email in auth.users during OTP: {:?}",
+                    e
+                );
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     if let Some(old_uid) = existing_id {
         // Check if a completed OPAQUE record exists for this user ID
-        let has_opaque: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM auth_ext.opaque_records WHERE user_id = $1)")
-            .bind(old_uid)
-            .fetch_one(state.db())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to check existing opaque record during OTP: {:?}", e);
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-            })?;
+        let has_opaque: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM auth_ext.opaque_records WHERE user_id = $1)",
+        )
+        .bind(old_uid)
+        .fetch_one(state.db())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check existing opaque record during OTP: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
         if has_opaque {
             // Already registered!
-            return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserAlreadyExists, &rid));
+            return Err(ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::UserAlreadyExists,
+                &rid,
+            ));
         }
     }
 
     let otp_code = format!("{:06}", rand::thread_rng().gen_range(0..1000000));
 
     let redis_key = format!("otp:reg:{}", payload.email);
-    state.redis_set_ex(&redis_key, &otp_code, 300).await.map_err(|e| {
-        tracing::error!("Failed to store OTP in Redis: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    state
+        .redis_set_ex(&redis_key, &otp_code, 300)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to store OTP in Redis: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
-    let template = crate::notifications::resend::NotificationTemplate::RegisterOtp {
-        code: otp_code,
-    };
-    
-    state.notify(Uuid::nil(), &payload.email, template).await.map_err(|e| {
-        tracing::error!("Failed to send OTP email: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    let template =
+        crate::notifications::resend::NotificationTemplate::RegisterOtp { code: otp_code };
+
+    state
+        .notify(Uuid::nil(), &payload.email, template)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to send OTP email: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     Ok(success(&rid, SendOtpResponse { status: "ok" }))
 }
@@ -378,7 +438,7 @@ pub async fn register_verify_otp(
 ) -> Result<Json<SuccessEnvelope<VerifyOtpResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     require_idempotency(&state, &headers).await?;
-    
+
     let rate_key = format!("otp_verify:{}", payload.email);
     enforce_rate_limit(&state, &rate_key, 5).await?;
 
@@ -394,23 +454,32 @@ pub async fn register_verify_otp(
     })?;
 
     if cached_otp != payload.code {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::OtpInvalid, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::OtpInvalid,
+            &rid,
+        ));
     }
 
-    let _: () = state.redis_del(&redis_key).await.map_err(|e| {
-        tracing::warn!("Failed to delete OTP from Redis: {:?}", e);
-    }).unwrap_or_default();
+    let _: () = state
+        .redis_del(&redis_key)
+        .await
+        .map_err(|e| {
+            tracing::warn!("Failed to delete OTP from Redis: {:?}", e);
+        })
+        .unwrap_or_default();
 
     let mut token_bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut token_bytes);
     let verification_token = URL_SAFE_NO_PAD.encode(token_bytes);
 
     let verify_key = format!("verified:email:{}", payload.email);
-    state.redis_set_ex(&verify_key, &verification_token, 600).await.map_err(|e| {
-        tracing::error!("Failed to save verification token: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    state
+        .redis_set_ex(&verify_key, &verification_token, 600)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to save verification token: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     Ok(success(&rid, VerifyOtpResponse { verification_token }))
 }
-

@@ -1,10 +1,10 @@
-use axum::{extract::State, Json, Extension};
-use tower_http::request_id::RequestId;
-use crate::errors::ApiError;
-use crate::state::AppState;
 use crate::db::queries::app as app_queries;
 use crate::db::queries::ops as ops_queries;
+use crate::errors::ApiError;
 use crate::handlers::ops::auth_utils::Claims;
+use crate::state::AppState;
+use axum::{extract::State, Extension, Json};
+use tower_http::request_id::RequestId;
 use transfer_legacy_shared_types::models::app::BrandingConfig;
 
 pub async fn get_branding_handler(
@@ -27,10 +27,12 @@ pub async fn update_branding_handler(
     Json(payload): Json<BrandingConfig>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    app_queries::update_branding(&state.db, payload).await.map_err(|e| {
-        tracing::error!("Failed to update branding: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    app_queries::update_branding(&state.db, payload)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update branding: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     // Log activity
     let _ = ops_queries::log_activity(
@@ -40,8 +42,9 @@ pub async fn update_branding_handler(
         Some("settings"),
         Some("1"),
         None,
-        None
-    ).await;
+        None,
+    )
+    .await;
 
     Ok(Json(serde_json::json!({ "status": "updated" })))
 }
@@ -53,11 +56,13 @@ pub async fn update_content_ops_handler(
     Json(content): Json<transfer_legacy_shared_types::models::app::AppContent>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    
-    app_queries::update_app_content(&state.db, content.clone()).await.map_err(|e| {
-        tracing::error!("Failed to update app content from ops: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+
+    app_queries::update_app_content(&state.db, content.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update app content from ops: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     // Log activity
     let _ = ops_queries::log_activity(
@@ -67,8 +72,9 @@ pub async fn update_content_ops_handler(
         Some("content"),
         Some(&content.slug),
         None,
-        None
-    ).await;
+        None,
+    )
+    .await;
 
     Ok(Json(serde_json::json!({ "status": "updated" })))
 }

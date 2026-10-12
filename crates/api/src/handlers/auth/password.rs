@@ -2,18 +2,18 @@ use axum::extract::{Extension, State};
 use axum::{http::HeaderMap, Json};
 use serde::{Deserialize, Serialize};
 
+use crate::db::queries::auth::{update_opaque_record, OpaqueRecordRow};
 use crate::errors::{success, ApiError};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::notifications::resend::NotificationTemplate;
 use crate::state::AppState;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use rand::RngCore;
+use redis::AsyncCommands;
 use transfer_legacy_crypto_core::aead::decrypt;
 use transfer_legacy_crypto_core::opaque::registration_finish;
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
-use crate::db::queries::auth::{update_opaque_record, OpaqueRecordRow};
 use uuid::Uuid;
-use redis::AsyncCommands;
-use rand::RngCore;
 
 #[derive(Debug, Deserialize)]
 pub struct PasswordResetRequest {
@@ -154,16 +154,24 @@ pub async fn password_reset_init(
     )
     .await
     .map_err(|e| {
-        tracing::error!("Failed to verify token or reset password in Supabase: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::InvalidResetToken, &rid)
+        tracing::error!(
+            "Failed to verify token or reset password in Supabase: {:?}",
+            e
+        );
+        ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::InvalidResetToken,
+            &rid,
+        )
     })?;
 
     // 2. Initialize OPAQUE registration handshake on the server
-    let (registration_response, _req) =
-        transfer_legacy_crypto_core::opaque::registration_start(&state.opaque_setup, &payload.registration_request)
-            .map_err(|_| {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
-            })?;
+    let (registration_response, _req) = transfer_legacy_crypto_core::opaque::registration_start(
+        &state.opaque_setup,
+        &payload.registration_request,
+    )
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
 
     let session_id = Uuid::new_v4();
     let mut nonce_bytes = [0u8; 32];
@@ -196,7 +204,7 @@ pub async fn password_reset_confirm(
     Json(payload): Json<PasswordResetConfirmRequest>,
 ) -> Result<Json<crate::errors::SuccessEnvelope<PasswordResetResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    let config = state.config().await;
+    let _config = state.config().await;
 
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
@@ -205,7 +213,7 @@ pub async fn password_reset_confirm(
     // 1. Fetch user ID from Redis
     let redis_key = format!("opaque:reset:{}", payload.session_id);
     let mut conn = state.redis_conn.clone();
-    
+
     let user_id_str: Option<String> = conn.get(&redis_key).await.map_err(|e| {
         tracing::error!("Failed to fetch reset session from Redis: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
@@ -268,9 +276,13 @@ pub async fn password_reset_confirm(
     })?;
 
     // 3. Clear Redis reset session
-    let _: () = conn.del(&redis_key).await.map_err(|e| {
-        tracing::warn!("Failed to delete reset session from Redis: {:?}", e);
-    }).unwrap_or_default();
+    let _: () = conn
+        .del(&redis_key)
+        .await
+        .map_err(|e| {
+            tracing::warn!("Failed to delete reset session from Redis: {:?}", e);
+        })
+        .unwrap_or_default();
 
     Ok(success(&rid, PasswordResetResponse { status: "ok" }))
 }

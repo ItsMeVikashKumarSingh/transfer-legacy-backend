@@ -12,12 +12,11 @@ use sqlx::PgPool;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use transfer_legacy_crypto_core::opaque::{create_server_setup, server_setup_to_b64, DefaultSuite};
+use transfer_legacy_crypto_core::opaque::DefaultSuite;
 use uuid::Uuid;
 
 use crate::config::Config;
 use crate::state::AppState;
-use axum::http::HeaderValue;
 use transfer_legacy_crypto_core::aead::{decrypt, encrypt};
 
 pub struct TestContext {
@@ -54,13 +53,17 @@ pub async fn spawn_app() -> TestContext {
     // Automatically run migrations for fresh test environments, skip if requested
     if std::env::var("SKIP_MIGRATIONS").unwrap_or_default() != "true" {
         if let Err(e) = sqlx::migrate!("../../migrations").run(&pool).await {
-            tracing::warn!("Migration error (continuing anyway as tables might exist): {:?}", e);
+            tracing::warn!(
+                "Migration error (continuing anyway as tables might exist): {:?}",
+                e
+            );
         }
     }
 
     let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
         let key = config.server_private_key_b64.as_deref().unwrap_or_default();
-        let s = crate::services::signing::InMemorySigner::new(key).expect("Test signer setup failed");
+        let s =
+            crate::services::signing::InMemorySigner::new(key).expect("Test signer setup failed");
         Arc::new(s)
     } else {
         let s = crate::services::signing::OpenBaoSigner::new(
@@ -177,6 +180,7 @@ impl CryptoClient {
     }
 }
 
+#[allow(dead_code)]
 pub async fn create_test_user(db: &PgPool, user_id: Uuid, email: &str) {
     sqlx::query("INSERT INTO auth.users (id, email) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(user_id)

@@ -164,10 +164,9 @@ mod tests {
         // 8. Real Resend Notification Verification
         println!("✉️ Testing REAL Resend Notification delivery...");
 
-        let mut origins = Vec::new();
-        origins.push(axum::http::HeaderValue::from_static(
+        let origins = vec![axum::http::HeaderValue::from_static(
             "http://localhost:3000",
-        ));
+        )];
 
         let config = Config {
             environment: Environment::Local,
@@ -238,9 +237,10 @@ mod tests {
     #[tokio::test]
     async fn test_redis_connection() {
         dotenvy::from_filename(".env.local").ok();
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
         let client = redis::Client::open(redis_url).unwrap();
-        match client.get_async_connection().await {
+        match client.get_multiplexed_async_connection().await {
             Ok(_) => println!("RECONNECT SUCCESSFUL"),
             Err(e) => panic!("RECONNECT FAILED: {:?}", e),
         }

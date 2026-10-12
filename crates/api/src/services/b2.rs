@@ -18,7 +18,14 @@ pub async fn presign_put(
     content_type: &str,
     expires_secs: u64,
 ) -> Result<String, B2Error> {
-    presign_put_to_bucket(config, &config.b2_bucket_name, key, content_type, expires_secs).await
+    presign_put_to_bucket(
+        config,
+        &config.b2_bucket_name,
+        key,
+        content_type,
+        expires_secs,
+    )
+    .await
 }
 
 pub async fn presign_put_to_bucket(
@@ -59,11 +66,7 @@ pub async fn presign_put_to_bucket(
     Ok(presigned.uri().to_string())
 }
 
-pub async fn upload_anchor(
-    config: &Config,
-    key: &str,
-    payload: Vec<u8>,
-) -> Result<(), B2Error> {
+pub async fn upload_anchor(config: &Config, key: &str, payload: Vec<u8>) -> Result<(), B2Error> {
     let creds = Credentials::new(
         config.b2_key_id.clone(),
         config.b2_app_key.clone(),
@@ -91,4 +94,3 @@ pub async fn upload_anchor(
 
     Ok(())
 }
-

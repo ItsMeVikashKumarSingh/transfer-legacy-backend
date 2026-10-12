@@ -28,7 +28,11 @@ pub struct HybridEnvelope {
 }
 
 impl HybridEnvelope {
-    pub fn validate_binding(&self, expected_owner: &str, expected_item: &str) -> Result<(), &'static str> {
+    pub fn validate_binding(
+        &self,
+        expected_owner: &str,
+        expected_item: &str,
+    ) -> Result<(), &'static str> {
         if self.wrapper != "hybrid-wrap-v1" {
             return Err("invalid wrapper type; expected hybrid-wrap-v1");
         }

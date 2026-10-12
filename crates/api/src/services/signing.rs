@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use ed25519_dalek::{SigningKey, Signer};
+use ed25519_dalek::{Signer, SigningKey};
 use reqwest::Client;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[async_trait]
 pub trait TransitSigner: Send + Sync {
@@ -49,7 +48,10 @@ impl TransitSigner for OpenBaoSigner {
             .await?;
 
         if !res.status().is_success() {
-            return Err(anyhow::anyhow!("OpenBao transit signing HTTP error: {}", res.status()));
+            return Err(anyhow::anyhow!(
+                "OpenBao transit signing HTTP error: {}",
+                res.status()
+            ));
         }
 
         let body: SignResponse = res.json().await?;
@@ -70,7 +72,9 @@ impl InMemorySigner {
             return Ok(Self { signing_key });
         }
         let key_bytes = STANDARD.decode(private_key_b64.trim())?;
-        let key_bytes_32: [u8; 32] = key_bytes.as_slice().try_into()
+        let key_bytes_32: [u8; 32] = key_bytes
+            .as_slice()
+            .try_into()
             .map_err(|_| anyhow::anyhow!("Invalid private key length: expected 32 bytes"))?;
         let signing_key = SigningKey::from_bytes(&key_bytes_32);
         Ok(Self { signing_key })

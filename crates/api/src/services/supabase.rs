@@ -30,6 +30,7 @@ pub struct RefreshResponse {
     pub expires_in: i64,
 }
 
+#[allow(dead_code)]
 pub async fn send_password_recovery(config: &Config, email: &str) -> Result<(), SupabaseError> {
     let client = Client::new();
     let url = format!("{}/auth/v1/recover", config.supabase_url);
@@ -118,7 +119,10 @@ pub async fn reset_password_with_token(
 
     if res.status().is_success() {
         let body: serde_json::Value = res.json().await.map_err(|_| SupabaseError::Unexpected)?;
-        let id_str = body.get("id").and_then(|v| v.as_str()).ok_or(SupabaseError::Unexpected)?;
+        let id_str = body
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or(SupabaseError::Unexpected)?;
         let user_id = uuid::Uuid::parse_str(id_str).map_err(|_| SupabaseError::Unexpected)?;
         Ok(user_id)
     } else {
@@ -180,14 +184,24 @@ pub async fn register_user_in_supabase(
         .map_err(|_| SupabaseError::Http)?;
 
     let status = res.status();
-    if status.is_success() || status == reqwest::StatusCode::CONFLICT || status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+    if status.is_success()
+        || status == reqwest::StatusCode::CONFLICT
+        || status == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    {
         Ok(())
     } else {
         let body = res.text().await.unwrap_or_default();
-        if body.contains("23505") || body.contains("duplicate key") || body.contains("already exists") {
+        if body.contains("23505")
+            || body.contains("duplicate key")
+            || body.contains("already exists")
+        {
             Err(SupabaseError::UserAlreadyExists)
         } else {
-            tracing::error!("Supabase Admin user creation failed: status={}, body={}", status, body);
+            tracing::error!(
+                "Supabase Admin user creation failed: status={}, body={}",
+                status,
+                body
+            );
             Err(SupabaseError::Unexpected)
         }
     }
@@ -215,12 +229,20 @@ pub async fn delete_user_in_supabase(
         Ok(())
     } else {
         let err_body = res.text().await.unwrap_or_default();
-        tracing::error!("Supabase Admin user deletion failed: status={}, body={}", status, err_body);
+        tracing::error!(
+            "Supabase Admin user deletion failed: status={}, body={}",
+            status,
+            err_body
+        );
         Err(SupabaseError::Unexpected)
     }
 }
 
-pub async fn get_user_id_from_token(config: &Config, access_token: &str) -> Result<uuid::Uuid, SupabaseError> {
+#[allow(dead_code)]
+pub async fn get_user_id_from_token(
+    config: &Config,
+    access_token: &str,
+) -> Result<uuid::Uuid, SupabaseError> {
     let client = Client::new();
     let url = format!("{}/auth/v1/user", config.supabase_url);
     let res = client
@@ -233,11 +255,13 @@ pub async fn get_user_id_from_token(config: &Config, access_token: &str) -> Resu
 
     if res.status().is_success() {
         let body: serde_json::Value = res.json().await.map_err(|_| SupabaseError::Unexpected)?;
-        let id_str = body.get("id").and_then(|v| v.as_str()).ok_or(SupabaseError::Unexpected)?;
+        let id_str = body
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or(SupabaseError::Unexpected)?;
         let user_id = uuid::Uuid::parse_str(id_str).map_err(|_| SupabaseError::Unexpected)?;
         Ok(user_id)
     } else {
         Err(SupabaseError::Unexpected)
     }
 }
-

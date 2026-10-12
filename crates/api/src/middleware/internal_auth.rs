@@ -1,9 +1,9 @@
-use axum::http::{HeaderMap, StatusCode, request::Parts};
+use crate::handlers::ops::auth_utils;
+use crate::state::AppState;
+use axum::extract::{Request, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::extract::{Request, State};
-use crate::state::AppState;
-use crate::handlers::ops::auth_utils;
 
 pub async fn ensure_internal_access(
     state: &AppState,
@@ -57,7 +57,7 @@ pub async fn administrative_auth(
         let config = state.config().await;
         let claims = auth_utils::validate_token(token, &config.jwt_secret)
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
-        
+
         // Inject claims for handlers
         request.extensions_mut().insert(claims);
         return Ok(next.run(request).await);

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::db::queries::inheritance::{
-    fetch_policy_for_update_tx, insert_policy_tx, update_policy_tx, fetch_policy_by_owner,
+    fetch_policy_by_owner, fetch_policy_for_update_tx, insert_policy_tx, update_policy_tx,
 };
 use crate::db::queries::stepup::{consume_stepup_challenge_tx, fetch_stepup_challenge_tx};
 use crate::errors::ApiError;
@@ -67,9 +67,15 @@ pub async fn get_policy_handler(
         .await
         .map_err(|e| {
             if matches!(e, sqlx::Error::RowNotFound) {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::NotFound,
+                    &rid,
+                )
             } else {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
             }
         })?;
 

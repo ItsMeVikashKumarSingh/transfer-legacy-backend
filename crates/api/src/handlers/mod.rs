@@ -7,10 +7,10 @@ pub mod devices;
 pub mod gdpr;
 pub mod health;
 pub mod inheritance;
+pub mod jobs;
 pub mod metrics;
 pub mod openapi;
 pub mod ops;
-pub mod jobs;
 pub mod vault;
 
 pub use capabilities::capabilities;

@@ -17,7 +17,7 @@ use crate::db::queries::inheritance::fetch_policy_for_update_tx;
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
-use crate::services::{audit, b2, openbao};
+use crate::services::{audit, b2};
 use crate::state::AppState;
 use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize, signatures::verify_ed25519};
 
@@ -585,7 +585,9 @@ pub async fn create_release_record(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
     })?;
     let payload_hash = sha256(&payload_bytes);
-    let signature = state.signer.sign_digest("tl-signing", &payload_hash)
+    let signature = state
+        .signer
+        .sign_digest("tl-signing", &payload_hash)
         .await
         .map_err(|_| {
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)

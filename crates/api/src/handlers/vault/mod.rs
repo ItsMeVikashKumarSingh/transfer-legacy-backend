@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 use crate::db::queries::auth::fetch_opaque_record;
 use crate::db::queries::vault::{
-    delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share, update_item,
+    delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share,
+    update_item,
 };
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};

@@ -10,6 +10,7 @@ use crate::config::Config;
 pub struct AppState {
     pub config: Arc<RwLock<Config>>,
     pub db: PgPool,
+    #[allow(dead_code)]
     pub redis: RedisClient,
     pub redis_conn: redis::aio::ConnectionManager,
     pub opaque_setup: OpaqueServerSetup,
@@ -37,7 +38,6 @@ impl AppState {
             .idle_timeout(std::time::Duration::from_secs(30))
             .connect_lazy(&config.database_url)?;
         let redis = RedisClient::open(config.redis_url.as_str())?;
-
 
         let redis_conn = tokio::time::timeout(
             std::time::Duration::from_secs(5),
@@ -76,7 +76,6 @@ impl AppState {
         })
     }
 
-
     /// Pull a cloned snapshot of the current config.
     pub async fn config(&self) -> Config {
         self.config.read().await.clone()
@@ -111,7 +110,12 @@ impl AppState {
         }
     }
 
-    pub async fn redis_set_ex(&self, key: &str, value: &str, seconds: u64) -> Result<(), redis::RedisError> {
+    pub async fn redis_set_ex(
+        &self,
+        key: &str,
+        value: &str,
+        seconds: u64,
+    ) -> Result<(), redis::RedisError> {
         use redis::AsyncCommands;
         let mut conn = self.redis_conn.clone();
         match conn.set_ex(key, value, seconds).await {

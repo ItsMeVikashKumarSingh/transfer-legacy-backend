@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
 
 mod config;
 mod db;
@@ -21,13 +22,15 @@ use crate::errors::ApiError;
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
     if let Err(e) = dotenvy::from_filename(".env.local") {
-        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound) {
+        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound)
+        {
             eprintln!("ERROR: Failed to parse .env.local file: {}", e);
             std::process::exit(1);
         }
     }
     if let Err(e) = dotenvy::dotenv() {
-        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound) {
+        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound)
+        {
             eprintln!("ERROR: Failed to parse .env file: {}", e);
             std::process::exit(1);
         }
@@ -49,7 +52,10 @@ async fn main() -> Result<(), ApiError> {
             }
         }
     } else {
-        tracing::info!("Loading configuration from OpenBao (Environment: {})...", std::env::var("TL_ENV").unwrap_or_else(|_| "unknown".into()));
+        tracing::info!(
+            "Loading configuration from OpenBao (Environment: {})...",
+            std::env::var("TL_ENV").unwrap_or_else(|_| "unknown".into())
+        );
         match Config::load().await {
             Ok(cfg) => cfg,
             Err(e) => {
@@ -57,7 +63,10 @@ async fn main() -> Result<(), ApiError> {
                 use std::io::Write;
                 std::io::stdout().flush().ok();
                 std::io::stderr().flush().ok();
-                panic!("CRITICAL: Failed to load configuration during startup: {}", e);
+                panic!(
+                    "CRITICAL: Failed to load configuration during startup: {}",
+                    e
+                );
             }
         }
     };
@@ -68,7 +77,10 @@ async fn main() -> Result<(), ApiError> {
             use std::io::Write;
             std::io::stdout().flush().ok();
             std::io::stderr().flush().ok();
-            panic!("CRITICAL: Failed to initialize application state during startup: {}", e);
+            panic!(
+                "CRITICAL: Failed to initialize application state during startup: {}",
+                e
+            );
         }
     };
 
@@ -134,37 +146,45 @@ async fn main() -> Result<(), ApiError> {
     drop(config_lock); // Release lock before serve
 
     if std::env::var("VERCEL").is_ok() {
-        tracing::info!("Running under Vercel Serverless Runtime. Handing over to vercel_runtime::run...");
-        
-        let vercel_service = tower::service_fn(move |(_state, req): (vercel_runtime::AppState, hyper::Request<hyper::body::Incoming>)| {
-            let app = app.clone();
-            async move {
-                let req = req.map(axum::body::Body::new);
-                
-                use tower::util::ServiceExt;
-                let response = app.oneshot(req).await.map_err(|e| {
-                    Box::new(e) as vercel_runtime::Error
-                })?;
-                
-                let (parts, body) = response.into_parts();
-                
-                let sync_body = SyncBody::new(body);
-                
-                use http_body_util::BodyExt;
-                let mapped_body = sync_body
-                    .map_err(|err| Box::new(err) as vercel_runtime::Error)
-                    .boxed();
-                
-                let vercel_body = vercel_runtime::ResponseBody(mapped_body);
-                let vercel_response = hyper::Response::from_parts(parts, vercel_body);
-                
-                Ok::<_, vercel_runtime::Error>(vercel_response)
-            }
-        });
+        tracing::info!(
+            "Running under Vercel Serverless Runtime. Handing over to vercel_runtime::run..."
+        );
 
-        vercel_runtime::run(vercel_service).await.map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Vercel runtime execution error: {}", e))
-        })?;
+        let vercel_service = tower::service_fn(
+            move |(_state, req): (
+                vercel_runtime::AppState,
+                hyper::Request<hyper::body::Incoming>,
+            )| {
+                let app = app.clone();
+                async move {
+                    let req = req.map(axum::body::Body::new);
+
+                    use tower::util::ServiceExt;
+                    let response = app
+                        .oneshot(req)
+                        .await
+                        .map_err(|e| Box::new(e) as vercel_runtime::Error)?;
+
+                    let (parts, body) = response.into_parts();
+
+                    let sync_body = SyncBody::new(body);
+
+                    use http_body_util::BodyExt;
+                    let mapped_body = sync_body
+                        .map_err(|err| Box::new(err) as vercel_runtime::Error)
+                        .boxed();
+
+                    let vercel_body = vercel_runtime::ResponseBody(mapped_body);
+                    let vercel_response = hyper::Response::from_parts(parts, vercel_body);
+
+                    Ok::<_, vercel_runtime::Error>(vercel_response)
+                }
+            },
+        );
+
+        vercel_runtime::run(vercel_service)
+            .await
+            .map_err(|e| std::io::Error::other(format!("Vercel runtime execution error: {}", e)))?;
     } else {
         let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
         tracing::info!("listening on {bind_addr}");
@@ -207,4 +227,3 @@ impl<B: http_body::Body + Unpin> http_body::Body for SyncBody<B> {
         guard.size_hint()
     }
 }
-

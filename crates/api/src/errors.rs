@@ -3,7 +3,6 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use metrics::counter;
 use serde::Serialize;
-use tower_http::request_id::RequestId;
 
 use transfer_legacy_shared_types::AppError;
 
@@ -71,7 +70,11 @@ impl IntoResponse for ApiError {
             ApiError::AppWithRequestId(err, request_id) => {
                 let status = status_for(err);
                 if status == StatusCode::INTERNAL_SERVER_ERROR {
-                    tracing::error!("Internal AppError with request id ({}): {:?}", request_id, self);
+                    tracing::error!(
+                        "Internal AppError with request id ({}): {:?}",
+                        request_id,
+                        self
+                    );
                 }
                 (status, err.clone(), request_id.clone())
             }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use ed25519_dalek::{Signer, SigningKey};
 use opaque_ke::{

@@ -2,12 +2,11 @@ use axum::extract::{Extension, State};
 use axum::{http::HeaderMap, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::db::queries::auth::{fetch_opaque_record, fetch_user_keys_by_email};
-use crate::errors::{success, ApiError, SuccessEnvelope};
+use crate::errors::{ApiError, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::{enforce_rate_limit, require_idempotency};
 use crate::state::AppState;
@@ -71,11 +70,21 @@ pub async fn login_init(
     let record = fetch_opaque_record(&state.db, payload.user_id)
         .await
         .map_err(|e| {
-            tracing::error!("fetch_opaque_record failed in login_init for user {}: {:?}", payload.user_id, e);
+            tracing::error!(
+                "fetch_opaque_record failed in login_init for user {}: {:?}",
+                payload.user_id,
+                e
+            );
             if matches!(e, sqlx::Error::RowNotFound) {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::UserNotFound,
+                    &rid,
+                )
             } else {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
             }
         })?;
 
@@ -157,30 +166,49 @@ pub async fn login_finish(
     })?;
 
     opaque_login_finish(server_state, &payload.credential_finalization).map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::InvalidCredentials, &rid)
+        ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::InvalidCredentials,
+            &rid,
+        )
     })?;
 
     let record = fetch_opaque_record(&state.db, session.user_id)
         .await
         .map_err(|e| {
-            tracing::error!("fetch_opaque_record failed in login_finish for user {}: {:?}", session.user_id, e);
+            tracing::error!(
+                "fetch_opaque_record failed in login_finish for user {}: {:?}",
+                session.user_id,
+                e
+            );
             if matches!(e, sqlx::Error::RowNotFound) {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::UserNotFound,
+                    &rid,
+                )
             } else {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
             }
         })?;
 
-    let person_id: Uuid = sqlx::query_scalar(
-        "SELECT person_id FROM auth_ext.person_user_links WHERE user_id = $1"
-    )
-    .bind(session.user_id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to fetch person_id for user {}: {:?}", session.user_id, e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    let person_id: Uuid =
+        sqlx::query_scalar("SELECT person_id FROM auth_ext.person_user_links WHERE user_id = $1")
+            .bind(session.user_id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to fetch person_id for user {}: {:?}",
+                    session.user_id,
+                    e
+                );
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     let session_token = crate::services::sessions::issue_session_token(&config, session.user_id)
         .map_err(|_| {
@@ -266,9 +294,15 @@ pub async fn lookup_user_keys(
         .await
         .map_err(|e| {
             if matches!(e, sqlx::Error::RowNotFound) {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::NotFound,
+                    &rid,
+                )
             } else {
-                ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
             }
         })?;
 

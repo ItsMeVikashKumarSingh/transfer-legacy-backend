@@ -88,11 +88,10 @@ pub fn wrap_response<T: Serialize>(
         ApiError::app(AppError::Internal)
     })?;
     let aad = aad_from_headers(headers);
-    let CoreAeadEnvelope { nonce, ciphertext } =
-        encrypt(&key, &plaintext, &aad).map_err(|e| {
-            tracing::error!("wrap_response: Failed to encrypt response: {:?}", e);
-            ApiError::app(AppError::Internal)
-        })?;
+    let CoreAeadEnvelope { nonce, ciphertext } = encrypt(&key, &plaintext, &aad).map_err(|e| {
+        tracing::error!("wrap_response: Failed to encrypt response: {:?}", e);
+        ApiError::app(AppError::Internal)
+    })?;
 
     Ok(AeadResponse {
         nonce: URL_SAFE_NO_PAD.encode(nonce),
@@ -101,12 +100,10 @@ pub fn wrap_response<T: Serialize>(
 }
 
 fn decode_key(key_b64: &str) -> Result<Vec<u8>, ApiError> {
-    URL_SAFE_NO_PAD
-        .decode(key_b64.trim())
-        .map_err(|e| {
-            tracing::error!("decode_key: Base64 decoding failed for key_b64: {:?}", e);
-            ApiError::app(AppError::Internal)
-        })
+    URL_SAFE_NO_PAD.decode(key_b64.trim()).map_err(|e| {
+        tracing::error!("decode_key: Base64 decoding failed for key_b64: {:?}", e);
+        ApiError::app(AppError::Internal)
+    })
 }
 
 fn aad_from_headers(headers: &HeaderMap) -> Vec<u8> {
@@ -151,15 +148,18 @@ async fn enforce_replay(
     seq: u64,
     ts: i64,
 ) -> Result<(), ApiError> {
-    let systime_now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| {
-            tracing::error!("enforce_replay: System time calculation error: {:?}", e);
-            ApiError::app(AppError::ReplayOrSkew)
-        })?;
+    let systime_now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| {
+        tracing::error!("enforce_replay: System time calculation error: {:?}", e);
+        ApiError::app(AppError::ReplayOrSkew)
+    })?;
     let now_ts = systime_now.as_secs() as i64;
     if (now_ts - ts).abs() > 300 {
-        tracing::error!("enforce_replay: Clock skew detected. Now: {}, received ts: {}, diff: {}", now_ts, ts, (now_ts - ts).abs());
+        tracing::error!(
+            "enforce_replay: Clock skew detected. Now: {}, received ts: {}, diff: {}",
+            now_ts,
+            ts,
+            (now_ts - ts).abs()
+        );
         counter!("aead_failures_total", "reason" => "clock_skew").increment(1);
         return Err(ApiError::app(AppError::ReplayOrSkew));
     }
@@ -171,10 +171,17 @@ async fn enforce_replay(
     let last: Option<u64> = match conn.get(&key).await {
         Ok(val) => Ok(val),
         Err(e) => {
-            tracing::warn!("enforce_replay: Redis GET failed, retrying once. Error: {:?}", e);
+            tracing::warn!(
+                "enforce_replay: Redis GET failed, retrying once. Error: {:?}",
+                e
+            );
             let mut retry_conn = state.redis_conn.clone();
             retry_conn.get(&key).await.map_err(|err| {
-                tracing::error!("enforce_replay: Redis GET retry failed for key '{}': {:?}", key, err);
+                tracing::error!(
+                    "enforce_replay: Redis GET retry failed for key '{}': {:?}",
+                    key,
+                    err
+                );
                 ApiError::app(AppError::Internal)
             })
         }
@@ -186,7 +193,11 @@ async fn enforce_replay(
             if config.environment == crate::config::Environment::Local && seq == 1 {
                 tracing::warn!("🔄 Local dev: Client sequence reset detected (seq = 1). Resetting stored sequence.");
             } else {
-                tracing::error!("enforce_replay: Replay detected. client seq: {}, last stored seq: {}", seq, last_seq);
+                tracing::error!(
+                    "enforce_replay: Replay detected. client seq: {}, last stored seq: {}",
+                    seq,
+                    last_seq
+                );
                 counter!("nonce_reuse_detected_total").increment(1);
                 counter!("aead_failures_total", "reason" => "replay").increment(1);
                 return Err(ApiError::app(AppError::ReplayDetected));
@@ -199,11 +210,19 @@ async fn enforce_replay(
     let _: () = match set_res {
         Ok(_) => Ok(()),
         Err(e) => {
-            tracing::warn!("enforce_replay: Redis SET failed, retrying once. Error: {:?}", e);
+            tracing::warn!(
+                "enforce_replay: Redis SET failed, retrying once. Error: {:?}",
+                e
+            );
             let mut retry_conn = state.redis_conn.clone();
-            let retry_res: Result<(), redis::RedisError> = retry_conn.set_ex(&key, seq, 86400).await;
+            let retry_res: Result<(), redis::RedisError> =
+                retry_conn.set_ex(&key, seq, 86400).await;
             retry_res.map_err(|err| {
-                tracing::error!("enforce_replay: Redis SET retry failed for key '{}': {:?}", key, err);
+                tracing::error!(
+                    "enforce_replay: Redis SET retry failed for key '{}': {:?}",
+                    key,
+                    err
+                );
                 ApiError::app(AppError::Internal)
             })
         }

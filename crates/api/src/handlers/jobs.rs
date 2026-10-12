@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::HeaderMap,
-    Json,
-};
+use axum::{extract::State, http::HeaderMap, Json};
 use base64::Engine as _;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,9 +8,7 @@ use uuid::Uuid;
 use crate::errors::ApiError;
 use crate::notifications::resend::{send_notification, NotificationTemplate};
 use crate::state::AppState;
-use transfer_legacy_crypto_core::{
-    aead::decrypt, hash::sha256, jcs::canonicalize,
-};
+use transfer_legacy_crypto_core::{aead::decrypt, hash::sha256, jcs::canonicalize};
 use transfer_legacy_shared_types::AppError;
 
 #[derive(Serialize)]
@@ -62,7 +56,7 @@ async fn send_cron_notification(
     dedupe_key: &str,
 ) -> Result<(), anyhow::Error> {
     let template_name = template.template_name();
-    
+
     // Check & Insert Notification Log (Prevent duplicates)
     let res = sqlx::query(
         "INSERT INTO notify.notification_log (notification_id, policy_id, recipient_email, template_id, status, dedupe_key) 
@@ -153,11 +147,12 @@ pub async fn heartbeat_eval(
         let urgent_offset = Duration::days((cadence_days as f64 * 0.1).ceil() as i64);
         let daily_window = Duration::days(7.min(cadence_days as i64));
 
-        let user_email = sqlx::query_scalar::<_, String>("SELECT email FROM auth.users WHERE id = $1")
-            .bind(owner_id)
-            .fetch_one(pool)
-            .await
-            .ok();
+        let user_email =
+            sqlx::query_scalar::<_, String>("SELECT email FROM auth.users WHERE id = $1")
+                .bind(owner_id)
+                .fetch_one(pool)
+                .await
+                .ok();
 
         if let Some(email) = user_email {
             if now >= pending_at - early_offset {
@@ -168,7 +163,15 @@ pub async fn heartbeat_eval(
                     grace_deadline: pending_at.to_rfc3339(),
                 };
                 let dedupe_key = format!("owner_early-{}-{}", policy_id, now.date_naive());
-                let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+                let _ = send_cron_notification(
+                    pool,
+                    &state,
+                    Some(policy_id),
+                    &email,
+                    template,
+                    &dedupe_key,
+                )
+                .await;
             }
 
             if now >= pending_at - urgent_offset {
@@ -179,7 +182,15 @@ pub async fn heartbeat_eval(
                     grace_deadline: pending_at.to_rfc3339(),
                 };
                 let dedupe_key = format!("owner_urgent-{}-{}", policy_id, now.date_naive());
-                let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+                let _ = send_cron_notification(
+                    pool,
+                    &state,
+                    Some(policy_id),
+                    &email,
+                    template,
+                    &dedupe_key,
+                )
+                .await;
             }
 
             if now >= pending_at - daily_window && now < pending_at {
@@ -190,13 +201,24 @@ pub async fn heartbeat_eval(
                     grace_deadline: pending_at.to_rfc3339(),
                 };
                 let dedupe_key = format!("owner_daily-{}-{}", policy_id, now.date_naive());
-                let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+                let _ = send_cron_notification(
+                    pool,
+                    &state,
+                    Some(policy_id),
+                    &email,
+                    template,
+                    &dedupe_key,
+                )
+                .await;
             }
         }
     }
 
     // B. Transition active -> pending
-    let mut tx = pool.begin().await.map_err(|_| ApiError::App(AppError::Internal))?;
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|_| ApiError::App(AppError::Internal))?;
     let pending_rows = sqlx::query_as::<_, (Uuid, Uuid, DateTime<Utc>, DateTime<Utc>, String, String)>(
         "UPDATE inheritance.policies p SET status = 'pending', updated_at = now() 
          FROM auth_ext.persons pr 
@@ -224,14 +246,22 @@ pub async fn heartbeat_eval(
             "pending_at": pending_at,
             "grace_deadline": grace_deadline,
         });
-        crate::services::audit::append_event(&mut tx, policy_id, "policy_pending", &payload, None, None)
-            .await
-            .map_err(|_| ApiError::App(AppError::Internal))?;
+        crate::services::audit::append_event(
+            &mut tx,
+            policy_id,
+            "policy_pending",
+            &payload,
+            None,
+            None,
+        )
+        .await
+        .map_err(|_| ApiError::App(AppError::Internal))?;
 
-        if let Ok(Some(email)) = sqlx::query_scalar::<_, String>("SELECT email FROM auth.users WHERE id = $1")
-            .bind(owner_id)
-            .fetch_optional(tx.as_mut())
-            .await
+        if let Ok(Some(email)) =
+            sqlx::query_scalar::<_, String>("SELECT email FROM auth.users WHERE id = $1")
+                .bind(owner_id)
+                .fetch_optional(tx.as_mut())
+                .await
         {
             let template = NotificationTemplate::OwnerReminder {
                 urgency: "daily".to_string(),
@@ -240,7 +270,15 @@ pub async fn heartbeat_eval(
                 grace_deadline: grace_deadline.to_rfc3339(),
             };
             let dedupe_key = format!("owner-pending-{}-{}", policy_id, now.date_naive());
-            let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+            let _ = send_cron_notification(
+                pool,
+                &state,
+                Some(policy_id),
+                &email,
+                template,
+                &dedupe_key,
+            )
+            .await;
         }
     }
 
@@ -270,9 +308,16 @@ pub async fn heartbeat_eval(
             "policy_id": policy_id,
             "status": "investigating",
         });
-        crate::services::audit::append_event(&mut tx, policy_id, "policy_investigating", &payload, None, None)
-            .await
-            .map_err(|_| ApiError::App(AppError::Internal))?;
+        crate::services::audit::append_event(
+            &mut tx,
+            policy_id,
+            "policy_investigating",
+            &payload,
+            None,
+            None,
+        )
+        .await
+        .map_err(|_| ApiError::App(AppError::Internal))?;
 
         for email in extract_emails(&beneficiaries) {
             let template = NotificationTemplate::ClaimAvailable {
@@ -280,7 +325,15 @@ pub async fn heartbeat_eval(
                 policy_name: policy_name.clone(),
             };
             let dedupe_key = format!("beneficiary-investigating-{}-{}", policy_id, email);
-            let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+            let _ = send_cron_notification(
+                pool,
+                &state,
+                Some(policy_id),
+                &email,
+                template,
+                &dedupe_key,
+            )
+            .await;
         }
 
         for email in extract_emails(&approvers) {
@@ -289,11 +342,21 @@ pub async fn heartbeat_eval(
                 policy_name: policy_name.clone(),
             };
             let dedupe_key = format!("approver-investigating-{}-{}", policy_id, email);
-            let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+            let _ = send_cron_notification(
+                pool,
+                &state,
+                Some(policy_id),
+                &email,
+                template,
+                &dedupe_key,
+            )
+            .await;
         }
     }
 
-    tx.commit().await.map_err(|_| ApiError::App(AppError::Internal))?;
+    tx.commit()
+        .await
+        .map_err(|_| ApiError::App(AppError::Internal))?;
 
     Ok(Json(JobResult {
         success: true,
@@ -315,8 +378,10 @@ pub async fn audit_anchor(
     verify_cron_secret(&state, &headers).await?;
     let pool = &state.db;
     let config = state.config().await;
-    
-    let target_date = payload.date.unwrap_or_else(|| Utc::now().date_naive() - Duration::days(1));
+
+    let target_date = payload
+        .date
+        .unwrap_or_else(|| Utc::now().date_naive() - Duration::days(1));
 
     let entries: Vec<Vec<u8>> = sqlx::query_scalar(
         "SELECT event_hash FROM audit.events WHERE created_at::date = $1 ORDER BY created_at ASC",
@@ -340,9 +405,11 @@ pub async fn audit_anchor(
 
     let snapshot_bytes = canonicalize(&snapshot).map_err(|_| ApiError::App(AppError::Internal))?;
     let head_hash = sha256(&snapshot_bytes);
-    
+
     // Sign using swappable signer!
-    let signature = state.signer.sign_digest("tl-signing", &head_hash)
+    let signature = state
+        .signer
+        .sign_digest("tl-signing", &head_hash)
         .await
         .map_err(|_| ApiError::App(AppError::Internal))?;
 
@@ -356,7 +423,7 @@ pub async fn audit_anchor(
 
     let anchor_bytes = canonicalize(&anchor).map_err(|_| ApiError::App(AppError::Internal))?;
     let key = format!("{}/anchor.json", target_date);
-    
+
     crate::services::b2::upload_anchor(&config, &key, anchor_bytes)
         .await
         .map_err(|_| ApiError::App(AppError::Internal))?;
@@ -412,7 +479,10 @@ pub async fn release_eval(
         .map_err(|_| ApiError::App(AppError::Internal))?;
 
         if count >= m {
-            let mut tx = pool.begin().await.map_err(|_| ApiError::App(AppError::Internal))?;
+            let mut tx = pool
+                .begin()
+                .await
+                .map_err(|_| ApiError::App(AppError::Internal))?;
             sqlx::query(
                 "UPDATE inheritance.policies SET status = 'release_ready', 
                  conflict_hold_until = now() + interval '48 hours', updated_at = now() 
@@ -429,10 +499,19 @@ pub async fn release_eval(
                 "attestation_count": count,
                 "required": m,
             });
-            crate::services::audit::append_event(&mut tx, row.0, "m_of_n_release_ready", &payload, None, None)
+            crate::services::audit::append_event(
+                &mut tx,
+                row.0,
+                "m_of_n_release_ready",
+                &payload,
+                None,
+                None,
+            )
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
+            tx.commit()
                 .await
                 .map_err(|_| ApiError::App(AppError::Internal))?;
-            tx.commit().await.map_err(|_| ApiError::App(AppError::Internal))?;
         }
     }
 
@@ -460,7 +539,10 @@ pub async fn conflict_check(
     .map_err(|_| ApiError::App(AppError::Internal))?;
 
     for row in conflicts {
-        let mut tx = pool.begin().await.map_err(|_| ApiError::App(AppError::Internal))?;
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
         let updated = sqlx::query(
             "UPDATE inheritance.policies SET status = 'conflict_pending', 
              conflict_hold_until = now() + interval '48 hours', updated_at = now() 
@@ -491,12 +573,21 @@ pub async fn conflict_check(
                 "policy_id": row.0,
                 "reason": "multiple_confirmed_claimants",
             });
-            crate::services::audit::append_event(&mut tx, row.0, "conflict_detected", &payload, None, None)
-                .await
-                .map_err(|_| ApiError::App(AppError::Internal))?;
+            crate::services::audit::append_event(
+                &mut tx,
+                row.0,
+                "conflict_detected",
+                &payload,
+                None,
+                None,
+            )
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
         }
 
-        tx.commit().await.map_err(|_| ApiError::App(AppError::Internal))?;
+        tx.commit()
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
     }
 
     let manual_rows = sqlx::query_as::<_, (Uuid,)>(
@@ -508,7 +599,10 @@ pub async fn conflict_check(
     .map_err(|_| ApiError::App(AppError::Internal))?;
 
     for row in manual_rows {
-        let mut tx = pool.begin().await.map_err(|_| ApiError::App(AppError::Internal))?;
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
         sqlx::query(
             "UPDATE inheritance.policies SET status = 'manual_review', updated_at = now() 
              WHERE policy_id = $1 AND status = 'conflict_pending'",
@@ -529,10 +623,19 @@ pub async fn conflict_check(
             "policy_id": row.0,
             "status": "manual_review",
         });
-        crate::services::audit::append_event(&mut tx, row.0, "manual_review_opened", &payload, None, None)
+        crate::services::audit::append_event(
+            &mut tx,
+            row.0,
+            "manual_review_opened",
+            &payload,
+            None,
+            None,
+        )
+        .await
+        .map_err(|_| ApiError::App(AppError::Internal))?;
+        tx.commit()
             .await
             .map_err(|_| ApiError::App(AppError::Internal))?;
-        tx.commit().await.map_err(|_| ApiError::App(AppError::Internal))?;
     }
 
     Ok(Json(JobResult {
@@ -570,7 +673,10 @@ pub async fn release_delivery(
         let owner_name = decrypt_owner_name(&config.server_aead_key_b64, &enc_owner_name, owner_id)
             .unwrap_or_else(|_| "Policy Owner".to_string());
 
-        let mut tx = pool.begin().await.map_err(|_| ApiError::App(AppError::Internal))?;
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
         let updated = sqlx::query(
             "UPDATE inheritance.policies SET status = 'released', updated_at = now() 
              WHERE policy_id = $1 AND status = 'release_ready'",
@@ -585,12 +691,21 @@ pub async fn release_delivery(
                 "policy_id": policy_id,
                 "status": "released",
             });
-            crate::services::audit::append_event(&mut tx, policy_id, "policy_released", &payload, None, None)
-                .await
-                .map_err(|_| ApiError::App(AppError::Internal))?;
+            crate::services::audit::append_event(
+                &mut tx,
+                policy_id,
+                "policy_released",
+                &payload,
+                None,
+                None,
+            )
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
         }
 
-        tx.commit().await.map_err(|_| ApiError::App(AppError::Internal))?;
+        tx.commit()
+            .await
+            .map_err(|_| ApiError::App(AppError::Internal))?;
 
         for email in extract_emails(&beneficiaries) {
             let template = NotificationTemplate::ReleaseReady {
@@ -598,7 +713,15 @@ pub async fn release_delivery(
                 policy_name: policy_name.clone(),
             };
             let dedupe_key = format!("release-ready-{}-{}", policy_id, email);
-            let _ = send_cron_notification(pool, &state, Some(policy_id), &email, template, &dedupe_key).await;
+            let _ = send_cron_notification(
+                pool,
+                &state,
+                Some(policy_id),
+                &email,
+                template,
+                &dedupe_key,
+            )
+            .await;
         }
     }
 

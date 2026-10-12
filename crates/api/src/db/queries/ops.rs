@@ -145,19 +145,26 @@ pub async fn update_manual_review_decision(
 
 use transfer_legacy_shared_types::models::ops::{OpsAdmin, OpsRole};
 
-pub async fn fetch_admin_by_email(pool: &PgPool, email: &str) -> Result<(Uuid, String, String), sqlx::Error> {
+pub async fn fetch_admin_by_email(
+    pool: &PgPool,
+    email: &str,
+) -> Result<(Uuid, String, String), sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
         "SELECT a.id, a.password_hash, r.name as role_name 
          FROM ops.admins a 
          JOIN ops.roles r ON a.role_id = r.id 
-         WHERE a.email = $1 AND a.is_active = true"
+         WHERE a.email = $1 AND a.is_active = true",
     )
     .bind(email)
     .fetch_one(pool)
     .await?;
 
-    Ok((row.get("id"), row.get("password_hash"), row.get("role_name")))
+    Ok((
+        row.get("id"),
+        row.get("password_hash"),
+        row.get("role_name"),
+    ))
 }
 
 pub async fn list_admins(pool: &PgPool) -> Result<Vec<OpsAdmin>, sqlx::Error> {
@@ -171,15 +178,18 @@ pub async fn list_admins(pool: &PgPool) -> Result<Vec<OpsAdmin>, sqlx::Error> {
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| OpsAdmin {
-        id: r.get("id"),
-        email: r.get("email"),
-        role_id: r.get("role_id"),
-        role_name: r.get("role_name"),
-        is_active: r.get("is_active"),
-        last_login: r.get("last_login"),
-        created_at: r.get("created_at"),
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| OpsAdmin {
+            id: r.get("id"),
+            email: r.get("email"),
+            role_id: r.get("role_id"),
+            role_name: r.get("role_name"),
+            is_active: r.get("is_active"),
+            last_login: r.get("last_login"),
+            created_at: r.get("created_at"),
+        })
+        .collect())
 }
 
 pub async fn create_admin(
@@ -190,7 +200,7 @@ pub async fn create_admin(
 ) -> Result<Uuid, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
-        "INSERT INTO ops.admins (email, password_hash, role_id) VALUES ($1, $2, $3) RETURNING id"
+        "INSERT INTO ops.admins (email, password_hash, role_id) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(email)
     .bind(password_hash)
@@ -209,7 +219,11 @@ pub async fn delete_admin(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-pub async fn update_admin_password(pool: &PgPool, id: Uuid, password_hash: &str) -> Result<(), sqlx::Error> {
+pub async fn update_admin_password(
+    pool: &PgPool,
+    id: Uuid,
+    password_hash: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE ops.admins SET password_hash = $1, updated_at = now() WHERE id = $2")
         .bind(password_hash)
         .bind(id)
@@ -232,27 +246,33 @@ pub async fn list_roles(pool: &PgPool) -> Result<Vec<OpsRole>, sqlx::Error> {
         .fetch_all(pool)
         .await?;
 
-    Ok(rows.into_iter().map(|r| {
-        let permissions_val: Value = r.get("permissions");
-        let permissions: Vec<String> = serde_json::from_value(permissions_val)
-            .unwrap_or_else(|_| vec![]);
-            
-        OpsRole {
-            id: r.get("id"),
-            name: r.get("name"),
-            description: r.get("description"),
-            permissions,
-        }
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let permissions_val: Value = r.get("permissions");
+            let permissions: Vec<String> =
+                serde_json::from_value(permissions_val).unwrap_or_else(|_| vec![]);
+
+            OpsRole {
+                id: r.get("id"),
+                name: r.get("name"),
+                description: r.get("description"),
+                permissions,
+            }
+        })
+        .collect())
 }
 
-pub async fn fetch_role_permissions_by_name(pool: &PgPool, role_name: &str) -> Result<Vec<String>, sqlx::Error> {
+pub async fn fetch_role_permissions_by_name(
+    pool: &PgPool,
+    role_name: &str,
+) -> Result<Vec<String>, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query("SELECT permissions FROM ops.roles WHERE name = $1")
         .bind(role_name)
         .fetch_one(pool)
         .await?;
-    
+
     Ok(row.get("permissions"))
 }
 
@@ -273,7 +293,7 @@ pub async fn create_role(
 ) -> Result<Uuid, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
-        "INSERT INTO ops.roles (name, description, permissions) VALUES ($1, $2, $3) RETURNING id"
+        "INSERT INTO ops.roles (name, description, permissions) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(name)
     .bind(description)
@@ -365,19 +385,22 @@ pub async fn list_activity_logs(
     };
 
     let rows = query.fetch_all(pool).await?;
-    
-    Ok(rows.into_iter().map(|r| {
-        use sqlx::Row;
-        serde_json::json!({
-            "id": r.get::<Uuid, _>("id"),
-            "admin_id": r.get::<Option<Uuid>, _>("admin_id"),
-            "admin_email": r.get::<Option<String>, _>("admin_email"),
-            "action": r.get::<String, _>("action"),
-            "entity_type": r.get::<Option<String>, _>("entity_type"),
-            "entity_id": r.get::<Option<String>, _>("entity_id"),
-            "metadata": r.get::<Option<Value>, _>("metadata"),
-            "ip_address": r.get::<Option<String>, _>("ip_address"),
-            "created_at": r.get::<DateTime<Utc>, _>("created_at"),
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            use sqlx::Row;
+            serde_json::json!({
+                "id": r.get::<Uuid, _>("id"),
+                "admin_id": r.get::<Option<Uuid>, _>("admin_id"),
+                "admin_email": r.get::<Option<String>, _>("admin_email"),
+                "action": r.get::<String, _>("action"),
+                "entity_type": r.get::<Option<String>, _>("entity_type"),
+                "entity_id": r.get::<Option<String>, _>("entity_id"),
+                "metadata": r.get::<Option<Value>, _>("metadata"),
+                "ip_address": r.get::<Option<String>, _>("ip_address"),
+                "created_at": r.get::<DateTime<Utc>, _>("created_at"),
+            })
         })
-    }).collect())
+        .collect())
 }
