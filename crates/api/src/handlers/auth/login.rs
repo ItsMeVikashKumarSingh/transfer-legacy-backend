@@ -70,17 +70,21 @@ pub async fn login_init(
     let record = fetch_opaque_record(&state.db, payload.user_id)
         .await
         .map_err(|e| {
-            tracing::error!(
-                "fetch_opaque_record failed in login_init for user {}: {:?}",
-                payload.user_id,
-                e
-            );
             if matches!(e, sqlx::Error::RowNotFound) {
+                tracing::warn!(
+                    "fetch_opaque_record: user {} not found in login_init",
+                    payload.user_id
+                );
                 ApiError::app_with_request_id(
                     transfer_legacy_shared_types::AppError::UserNotFound,
                     &rid,
                 )
             } else {
+                tracing::error!(
+                    "fetch_opaque_record failed in login_init for user {}: {:?}",
+                    payload.user_id,
+                    e
+                );
                 ApiError::app_with_request_id(
                     transfer_legacy_shared_types::AppError::Internal,
                     &rid,
@@ -253,7 +257,12 @@ pub async fn lookup_user_id(
     Json(payload): Json<UserIdLookupRequest>,
 ) -> Result<Json<crate::errors::SuccessEnvelope<UserIdLookupResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
-    let row = sqlx::query_scalar::<_, Uuid>("SELECT id FROM auth.users WHERE email = $1")
+    let row = sqlx::query_scalar::<_, Uuid>(
+        r#"SELECT u.id 
+        FROM auth.users u 
+        INNER JOIN auth_ext.opaque_records o ON u.id = o.user_id 
+        WHERE u.email = $1 AND o.is_deleted = false"#
+    )
         .bind(&payload.email)
         .fetch_optional(state.db())
         .await
