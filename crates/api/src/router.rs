@@ -217,6 +217,11 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route(
             "/contact/message",
             post(crate::handlers::app::submit_contact_message_handler),
+        )
+        .route("/plans", get(crate::handlers::ops::list_plans_handler))
+        .route(
+            "/coupons/validate",
+            post(crate::handlers::ops::validate_coupon_handler),
         );
 
     let protected_ops_routes = Router::new()
@@ -236,6 +241,38 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route(
             "/roles/:id",
             delete(crate::handlers::ops::delete_role_handler),
+        )
+        .route("/users", get(crate::handlers::ops::list_users_handler))
+        .route(
+            "/users/:id/status",
+            put(crate::handlers::ops::update_user_status_handler),
+        )
+        .route(
+            "/users/:id/plan",
+            put(crate::handlers::ops::update_user_plan_handler),
+        )
+        .route(
+            "/plans",
+            get(crate::handlers::ops::list_plans_handler)
+                .post(crate::handlers::ops::create_plan_handler),
+        )
+        .route(
+            "/plans/:id",
+            put(crate::handlers::ops::update_plan_handler)
+                .delete(crate::handlers::ops::delete_plan_handler),
+        )
+        .route(
+            "/coupons",
+            get(crate::handlers::ops::list_coupons_handler)
+                .post(crate::handlers::ops::create_coupon_handler),
+        )
+        .route(
+            "/coupons/:id/toggle",
+            post(crate::handlers::ops::toggle_coupon_handler),
+        )
+        .route(
+            "/coupons/:id",
+            delete(crate::handlers::ops::delete_coupon_handler),
         )
         .route(
             "/waitlist",
