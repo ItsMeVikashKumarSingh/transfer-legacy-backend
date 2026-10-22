@@ -347,6 +347,11 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/server-capabilities", get(capabilities))
         .route("/openapi.json", get(crate::handlers::openapi::openapi_json))
         .route("/docs", get(crate::handlers::openapi::docs_ui))
+        .route("/plans", get(crate::handlers::ops::list_plans_handler))
+        .route(
+            "/coupons/validate",
+            post(crate::handlers::ops::validate_coupon_handler),
+        )
         .nest("/auth", auth_routes)
         .nest("/devices", device_routes)
         .nest("/vault", vault_routes)
