@@ -69,6 +69,7 @@ pub struct Config {
     pub tl_serverless: bool,
     pub server_private_key_b64: Option<String>,
     pub tl_cron_secret: Option<String>,
+    pub gemini_api_key: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -142,6 +143,8 @@ pub struct OpenBaoSecrets {
     pub ops_admin_email: Option<String>,
     #[serde(alias = "OPS_ADMIN_PASSWORD")]
     pub ops_admin_password: Option<String>,
+    #[serde(alias = "GEMINI_API_KEY", alias = "GOOGLE_AI_API_KEY")]
+    pub gemini_api_key: Option<String>,
 }
 
 impl Config {
@@ -289,6 +292,10 @@ impl Config {
             server_private_key_b64: None,
             tl_cron_secret: std::env::var("TL_CRON_SECRET")
                 .ok()
+                .map(|s| s.trim().to_string()),
+            gemini_api_key: s
+                .gemini_api_key
+                .or_else(|| std::env::var("GEMINI_API_KEY").ok())
                 .map(|s| s.trim().to_string()),
         })
     }
@@ -449,6 +456,10 @@ impl Config {
             tl_serverless,
             server_private_key_b64,
             tl_cron_secret: env::var("TL_CRON_SECRET")
+                .ok()
+                .map(|s| s.trim().to_string()),
+            gemini_api_key: env::var("GEMINI_API_KEY")
+                .or_else(|_| env::var("GOOGLE_AI_API_KEY"))
                 .ok()
                 .map(|s| s.trim().to_string()),
         })
