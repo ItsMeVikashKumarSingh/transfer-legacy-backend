@@ -154,7 +154,39 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             "/shares/revoke",
             post(crate::handlers::vault::revoke_share_handler),
         )
-        .route("/migrate", post(crate::handlers::vault::migrate_crypto));
+        .route("/migrate", post(crate::handlers::vault::migrate_crypto))
+        .route(
+            "/items/attachments/presign",
+            post(crate::handlers::vault::items::presign_attachment_upload),
+        )
+        .route(
+            "/items/attachments/confirm",
+            post(crate::handlers::vault::items::confirm_attachment_upload),
+        )
+        .route(
+            "/items/attachments/list",
+            post(crate::handlers::vault::items::list_attachments),
+        )
+        .route(
+            "/items/attachments/download",
+            post(crate::handlers::vault::items::download_attachment),
+        )
+        .route(
+            "/items/attachments/delete",
+            post(crate::handlers::vault::items::delete_attachment),
+        );
+
+    let user_routes = Router::new()
+        .route(
+            "/avatar/presign",
+            post(crate::handlers::users::presign_avatar_upload),
+        )
+        .route(
+            "/avatar/confirm",
+            post(crate::handlers::users::confirm_avatar_upload),
+        )
+        .route("/avatar", delete(crate::handlers::users::delete_avatar))
+        .route("/:user_id/avatar", get(crate::handlers::users::get_avatar));
 
     let inheritance_routes = Router::new()
         .route("/policy", put(crate::handlers::inheritance::upsert_policy))
@@ -205,6 +237,9 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
     let gdpr_routes = Router::new()
         .route("/export", post(crate::handlers::gdpr::export_gdpr))
         .route("/erase", post(crate::handlers::gdpr::erase_gdpr));
+
+    let ai_routes = Router::new()
+        .route("/planner/chat", post(crate::handlers::ai::planner_chat_handler));
 
     let app_routes = Router::new()
         .route("/branding", get(crate::handlers::app::get_branding))
@@ -354,11 +389,13 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         )
         .nest("/auth", auth_routes)
         .nest("/devices", device_routes)
+        .nest("/users", user_routes)
         .nest("/vault", vault_routes)
         .nest("/inheritance", inheritance_routes)
         .nest("/claims", claims_routes)
         .nest("/audit", audit_routes)
         .nest("/gdpr", gdpr_routes)
+        .nest("/ai", ai_routes)
         .nest("/app", app_routes)
         .nest("/ops", ops_routes)
         .nest("/jobs", jobs_routes);

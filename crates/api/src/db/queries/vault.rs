@@ -210,3 +210,127 @@ pub async fn revoke_share(
     .await?;
     Ok(())
 }
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ItemAttachmentRow {
+    pub attachment_id: Uuid,
+    pub item_id: Uuid,
+    pub user_id: Uuid,
+    pub file_name: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    pub sha256: Option<Vec<u8>>,
+    pub object_key: String,
+    pub is_encrypted: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+pub async fn insert_item_attachment(
+    pool: &PgPool,
+    attachment_id: Uuid,
+    item_id: Uuid,
+    user_id: Uuid,
+    file_name: &str,
+    mime_type: &str,
+    size_bytes: i64,
+    sha256: Option<Vec<u8>>,
+    object_key: &str,
+    is_encrypted: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"INSERT INTO core.item_attachments 
+        (attachment_id, item_id, user_id, file_name, mime_type, size_bytes, sha256, object_key, is_encrypted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+    )
+    .bind(attachment_id)
+    .bind(item_id)
+    .bind(user_id)
+    .bind(file_name)
+    .bind(mime_type)
+    .bind(size_bytes)
+    .bind(sha256)
+    .bind(object_key)
+    .bind(is_encrypted)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn list_item_attachments(
+    pool: &PgPool,
+    item_id: Uuid,
+    user_id: Uuid,
+) -> Result<Vec<ItemAttachmentRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, Uuid, String, String, i64, Option<Vec<u8>>, String, bool, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT attachment_id, item_id, user_id, file_name, mime_type, size_bytes, sha256, object_key, is_encrypted, created_at
+        FROM core.item_attachments
+        WHERE item_id = $1 AND user_id = $2 AND is_deleted = false
+        ORDER BY created_at DESC"#,
+    )
+    .bind(item_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| ItemAttachmentRow {
+            attachment_id: r.0,
+            item_id: r.1,
+            user_id: r.2,
+            file_name: r.3,
+            mime_type: r.4,
+            size_bytes: r.5,
+            sha256: r.6,
+            object_key: r.7,
+            is_encrypted: r.8,
+            created_at: r.9,
+        })
+        .collect())
+}
+
+pub async fn get_item_attachment(
+    pool: &PgPool,
+    attachment_id: Uuid,
+    user_id: Uuid,
+) -> Result<ItemAttachmentRow, sqlx::Error> {
+    let row = sqlx::query_as::<_, (Uuid, Uuid, Uuid, String, String, i64, Option<Vec<u8>>, String, bool, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT attachment_id, item_id, user_id, file_name, mime_type, size_bytes, sha256, object_key, is_encrypted, created_at
+        FROM core.item_attachments
+        WHERE attachment_id = $1 AND user_id = $2 AND is_deleted = false"#,
+    )
+    .bind(attachment_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(ItemAttachmentRow {
+        attachment_id: row.0,
+        item_id: row.1,
+        user_id: row.2,
+        file_name: row.3,
+        mime_type: row.4,
+        size_bytes: row.5,
+        sha256: row.6,
+        object_key: row.7,
+        is_encrypted: row.8,
+        created_at: row.9,
+    })
+}
+
+pub async fn delete_item_attachment(
+    pool: &PgPool,
+    attachment_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE core.item_attachments SET is_deleted = true, deleted_at = now() WHERE attachment_id = $1 AND user_id = $2",
+    )
+    .bind(attachment_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}

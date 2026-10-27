@@ -146,3 +146,39 @@ pub async fn fetch_user_keys_by_email(
         kyber768_pubkey: row.2,
     })
 }
+
+pub async fn update_user_avatar(
+    pool: &PgPool,
+    user_id: Uuid,
+    avatar_url: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE auth_ext.persons p
+        SET avatar_url = $2, updated_at = now()
+        FROM auth_ext.person_user_links pul
+        WHERE pul.person_id = p.person_id AND pul.user_id = $1"#,
+    )
+    .bind(user_id)
+    .bind(avatar_url)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn fetch_user_avatar(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    let row = sqlx::query_as::<_, (Option<String>,)>(
+        r#"SELECT p.avatar_url
+        FROM auth_ext.persons p
+        JOIN auth_ext.person_user_links pul ON pul.person_id = p.person_id
+        WHERE pul.user_id = $1 AND p.is_deleted = false"#,
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.and_then(|r| r.0))
+}

@@ -4,6 +4,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub mod items;
+
 use crate::db::queries::auth::fetch_opaque_record;
 use crate::db::queries::vault::{
     delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share,

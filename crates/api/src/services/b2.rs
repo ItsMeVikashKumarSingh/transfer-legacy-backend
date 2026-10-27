@@ -66,6 +66,50 @@ pub async fn presign_put_to_bucket(
     Ok(presigned.uri().to_string())
 }
 
+pub async fn presign_get(
+    config: &Config,
+    key: &str,
+    expires_secs: u64,
+) -> Result<String, B2Error> {
+    presign_get_from_bucket(config, &config.b2_bucket_name, key, expires_secs).await
+}
+
+pub async fn presign_get_from_bucket(
+    config: &Config,
+    bucket: &str,
+    key: &str,
+    expires_secs: u64,
+) -> Result<String, B2Error> {
+    let creds = Credentials::new(
+        config.b2_key_id.clone(),
+        config.b2_app_key.clone(),
+        None,
+        None,
+        "b2",
+    );
+
+    let conf = aws_sdk_s3::config::Builder::new()
+        .region(Region::new("us-east-1"))
+        .endpoint_url(config.b2_endpoint_url.clone())
+        .credentials_provider(creds)
+        .force_path_style(true)
+        .build();
+
+    let client = Client::from_conf(conf);
+    let presigned = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .presigned(
+            PresigningConfig::expires_in(Duration::from_secs(expires_secs))
+                .map_err(|_| B2Error::Presign)?,
+        )
+        .await
+        .map_err(|_| B2Error::Presign)?;
+
+    Ok(presigned.uri().to_string())
+}
+
 pub async fn upload_anchor(config: &Config, key: &str, payload: Vec<u8>) -> Result<(), B2Error> {
     let creds = Credentials::new(
         config.b2_key_id.clone(),
