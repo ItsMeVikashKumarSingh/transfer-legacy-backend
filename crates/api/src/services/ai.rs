@@ -82,14 +82,9 @@ impl AiPlannerService {
             .build()
             .unwrap_or_default();
 
-        let raw_model = model
+        let model = model
             .filter(|m| !m.trim().is_empty())
-            .unwrap_or_else(|| "gemini-2.0-flash".to_string());
-
-        let model = match raw_model.trim().to_lowercase().as_str() {
-            "gemini-2.5-flash" | "gemini-2.5" | "gemini-2.5-flash-preview" => "gemini-2.0-flash".to_string(),
-            _ => raw_model.trim().to_string(),
-        };
+            .unwrap_or_else(|| "gemini-2.5-flash".to_string());
 
         Self { client, api_key, model }
     }
@@ -201,20 +196,18 @@ impl AiPlannerService {
             }
         });
 
-        let models_to_try = if self.model == "gemini-1.5-flash" {
-            vec![self.model.as_str()]
-        } else {
-            vec![self.model.as_str(), "gemini-1.5-flash"]
-        };
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model,
+            api_key
+        );
 
         let mut last_err = String::new();
 
-        for target_model in models_to_try {
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                target_model,
-                api_key
-            );
+        for attempt in 0..3 {
+            if attempt > 0 {
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+            }
 
             let resp = match self.client.post(&url).json(&payload).send().await {
                 Ok(r) => r,
@@ -224,12 +217,16 @@ impl AiPlannerService {
                 }
             };
 
-            if !resp.status().is_success() {
-                let status = resp.status();
+            let status = resp.status();
+            if !status.is_success() {
                 let text = resp.text().await.unwrap_or_default();
-                last_err = format!("Gemini API error ({}) on {}: {}", status, target_model, text);
-                tracing::warn!("{}", last_err);
-                continue;
+                last_err = format!("Gemini API error ({}) on {}: {}", status, self.model, text);
+                tracing::warn!("Attempt {}: {}", attempt + 1, last_err);
+                if status.as_u16() == 503 || status.as_u16() == 429 {
+                    continue;
+                } else {
+                    break;
+                }
             }
 
             let resp_json: serde_json::Value = match resp.json().await {
