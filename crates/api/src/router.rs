@@ -1,7 +1,7 @@
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::middleware::{from_fn, from_fn_with_state};
 use axum::{
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use std::time::Duration;
@@ -19,7 +19,7 @@ use crate::state::AppState;
 pub fn create_router(config: &Config, state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(config.allowed_origins.clone()))
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
         .allow_headers([
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
@@ -241,6 +241,30 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
     let ai_routes = Router::new()
         .route("/planner/chat", post(crate::handlers::ai::planner_chat_handler));
 
+    let notification_routes = Router::new()
+        .route("/", get(crate::handlers::notifications::list_notifications))
+        .route(
+            "/:id/read",
+            patch(crate::handlers::notifications::mark_read),
+        )
+        .route(
+            "/read-all",
+            post(crate::handlers::notifications::mark_all_read),
+        )
+        .route(
+            "/:id",
+            delete(crate::handlers::notifications::delete_notification),
+        )
+        .route(
+            "/preferences",
+            get(crate::handlers::notifications::get_preferences)
+                .put(crate::handlers::notifications::update_preferences),
+        )
+        .route(
+            "/test-push",
+            post(crate::handlers::notifications::test_push),
+        );
+
     let app_routes = Router::new()
         .route("/branding", get(crate::handlers::app::get_branding))
         .route("/content/:slug", get(crate::handlers::app::get_content))
@@ -396,6 +420,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .nest("/audit", audit_routes)
         .nest("/gdpr", gdpr_routes)
         .nest("/ai", ai_routes)
+        .nest("/notifications", notification_routes)
         .nest("/app", app_routes)
         .nest("/ops", ops_routes)
         .nest("/jobs", jobs_routes);
