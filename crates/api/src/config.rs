@@ -70,6 +70,9 @@ pub struct Config {
     pub server_private_key_b64: Option<String>,
     pub tl_cron_secret: Option<String>,
     pub gemini_api_key: Option<String>,
+    pub gemini_model: String,
+    pub onesignal_app_id: Option<String>,
+    pub onesignal_rest_api_key: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -145,6 +148,8 @@ pub struct OpenBaoSecrets {
     pub ops_admin_password: Option<String>,
     #[serde(alias = "GEMINI_API_KEY", alias = "GOOGLE_AI_API_KEY")]
     pub gemini_api_key: Option<String>,
+    #[serde(alias = "GEMINI_MODEL")]
+    pub gemini_model: Option<String>,
 }
 
 impl Config {
@@ -297,6 +302,18 @@ impl Config {
                 .gemini_api_key
                 .or_else(|| std::env::var("GEMINI_API_KEY").ok())
                 .map(|s| s.trim().to_string()),
+            gemini_model: s
+                .gemini_model
+                .or_else(|| std::env::var("GEMINI_MODEL").ok())
+                .unwrap_or_else(|| "gemini-2.5-flash".to_string()),
+            onesignal_app_id: std::env::var("ONESIGNAL_APP_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty() && s != "YOUR_ONESIGNAL_APP_ID_HERE"),
+            onesignal_rest_api_key: std::env::var("ONESIGNAL_REST_API_KEY")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty() && s != "YOUR_ONESIGNAL_REST_API_KEY_HERE"),
         })
     }
 
@@ -462,6 +479,18 @@ impl Config {
                 .or_else(|_| env::var("GOOGLE_AI_API_KEY"))
                 .ok()
                 .map(|s| s.trim().to_string()),
+            gemini_model: env::var("GEMINI_MODEL")
+                .unwrap_or_else(|_| "gemini-2.5-flash".to_string())
+                .trim()
+                .to_string(),
+            onesignal_app_id: env::var("ONESIGNAL_APP_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty() && s != "YOUR_ONESIGNAL_APP_ID_HERE"),
+            onesignal_rest_api_key: env::var("ONESIGNAL_REST_API_KEY")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty() && s != "YOUR_ONESIGNAL_REST_API_KEY_HERE"),
         })
     }
 

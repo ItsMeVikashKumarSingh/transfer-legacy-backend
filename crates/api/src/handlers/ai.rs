@@ -22,12 +22,12 @@ pub async fn planner_chat_handler(
 ) -> Json<SuccessEnvelope<AiPlannerResponse>> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
-    let gemini_key = {
+    let (gemini_key, gemini_model) = {
         let cfg = state.config.read().await;
-        cfg.gemini_api_key.clone()
+        (cfg.gemini_api_key.clone(), cfg.gemini_model.clone())
     };
 
-    let service = AiPlannerService::new(gemini_key);
+    let service = AiPlannerService::new(gemini_key, Some(gemini_model));
     let response = service
         .query(&payload.message, &payload.history, payload.context.as_ref())
         .await;

@@ -72,16 +72,21 @@ pub fn scrub_credentials(text: &str) -> (String, bool) {
 pub struct AiPlannerService {
     client: Client,
     api_key: Option<String>,
+    model: String,
 }
 
 impl AiPlannerService {
-    pub fn new(api_key: Option<String>) -> Self {
+    pub fn new(api_key: Option<String>, model: Option<String>) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
             .unwrap_or_default();
 
-        Self { client, api_key }
+        let model = model
+            .filter(|m| !m.trim().is_empty())
+            .unwrap_or_else(|| "gemini-2.5-flash".to_string());
+
+        Self { client, api_key, model }
     }
 
     pub async fn query(
@@ -107,7 +112,7 @@ impl AiPlannerService {
                             reply: final_reply,
                             suggested_actions: generate_suggested_actions(context),
                             credential_redacted: redacted,
-                            model_used: "gemini-2.5-flash".to_string(),
+                            model_used: self.model.clone(),
                         };
                     }
                     Err(err) => {
@@ -135,7 +140,8 @@ impl AiPlannerService {
         context: Option<&LegacyContextSummary>,
     ) -> Result<String, String> {
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model,
             api_key
         );
 
