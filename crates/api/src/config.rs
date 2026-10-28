@@ -305,7 +305,7 @@ impl Config {
             gemini_model: s
                 .gemini_model
                 .or_else(|| std::env::var("GEMINI_MODEL").ok())
-                .unwrap_or_else(|| "gemini-2.5-flash".to_string()),
+                .unwrap_or_else(|| "gemini-2.0-flash".to_string()),
             onesignal_app_id: std::env::var("ONESIGNAL_APP_ID")
                 .ok()
                 .map(|s| s.trim().to_string())
@@ -480,7 +480,7 @@ impl Config {
                 .ok()
                 .map(|s| s.trim().to_string()),
             gemini_model: env::var("GEMINI_MODEL")
-                .unwrap_or_else(|_| "gemini-2.5-flash".to_string())
+                .unwrap_or_else(|_| "gemini-2.0-flash".to_string())
                 .trim()
                 .to_string(),
             onesignal_app_id: env::var("ONESIGNAL_APP_ID")
