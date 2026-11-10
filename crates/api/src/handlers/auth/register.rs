@@ -5,7 +5,8 @@ use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::db::queries::auth::{insert_opaque_record, insert_person_and_link, OpaqueRecordRow};
+use sha2::{Digest, Sha256};
+use crate::db::queries::auth::{insert_opaque_record, insert_person_and_link, ConsentInfo, OpaqueRecordRow};
 use crate::errors::{success, ApiError, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::{enforce_rate_limit, require_idempotency};
@@ -40,6 +41,10 @@ pub struct RegisterFinishRequest {
     pub argon2_params: Value,
     pub enc_legal_name: String,
     pub enc_email: String,
+    #[serde(default)]
+    pub terms_version: Option<String>,
+    #[serde(default)]
+    pub privacy_version: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -278,7 +283,32 @@ pub async fn register_finish(
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
-    let person_id = insert_person_and_link(&mut tx, session.user_id, enc_legal_name, enc_email)
+    let client_ip = headers
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+
+    let consent_ip_hash = client_ip.map(|ip| {
+        let mut hasher = Sha256::new();
+        hasher.update(ip.as_bytes());
+        hasher.finalize().to_vec()
+    });
+
+    let consent_user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let consent = ConsentInfo {
+        terms_version: payload.terms_version.clone(),
+        privacy_version: payload.privacy_version.clone(),
+        consent_ip_hash: consent_ip_hash.clone(),
+        consent_user_agent,
+    };
+
+    let person_id = insert_person_and_link(&mut tx, session.user_id, enc_legal_name, enc_email, Some(&consent))
         .await
         .map_err(|e| {
             tracing::error!("Failed to insert person and link: {:?}", e);
@@ -316,6 +346,32 @@ pub async fn register_finish(
         }
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    let payload_json = serde_json::json!({
+        "user_id": session.user_id,
+        "person_id": person_id,
+        "terms_version": payload.terms_version,
+        "privacy_version": payload.privacy_version,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    let payload_bytes = serde_json::to_vec(&payload_json).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let payload_hash = hasher.finalize().to_vec();
+
+    let _ = sqlx::query(
+        r#"INSERT INTO audit.events 
+        (event_id, policy_id, event_type, payload_hash, prev_hash, event_hash, actor_id, ip_hash, created_at)
+        VALUES ($1, NULL, $2, $3, NULL, $4, $5, $6, now())"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("auth.user.registered_with_consent")
+    .bind(&payload_hash)
+    .bind(&payload_hash)
+    .bind(session.user_id)
+    .bind(consent_ip_hash)
+    .execute(tx.as_mut())
+    .await;
 
     tx.commit().await.map_err(|e| {
         tracing::error!("Failed to commit transaction: {:?}", e);
