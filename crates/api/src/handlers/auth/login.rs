@@ -4,6 +4,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use sha2::{Digest, Sha256};
 
 use crate::db::queries::auth::{fetch_opaque_record, fetch_user_keys_by_email};
 use crate::errors::{ApiError, SuccessEnvelope};
@@ -223,6 +224,43 @@ pub async fn login_finish(
         tracing::error!("Redis del failed in login_finish: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    let client_ip = headers
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+
+    let ip_hash = client_ip.map(|ip| {
+        let mut hasher = Sha256::new();
+        hasher.update(ip.as_bytes());
+        hasher.finalize().to_vec()
+    });
+
+    let payload_json = serde_json::json!({
+        "user_id": session.user_id,
+        "event": "login_success",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    let payload_bytes = serde_json::to_vec(&payload_json).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let payload_hash = hasher.finalize().to_vec();
+
+    let _ = sqlx::query(
+        r#"INSERT INTO audit.events 
+        (event_id, policy_id, event_type, payload_hash, prev_hash, event_hash, actor_id, ip_hash, created_at)
+        VALUES ($1, NULL, $2, $3, NULL, $4, $5, $6, now())"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("auth.user.login_success")
+    .bind(&payload_hash)
+    .bind(&payload_hash)
+    .bind(session.user_id)
+    .bind(ip_hash)
+    .execute(&state.db)
+    .await;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: LoginFinishResponse {
