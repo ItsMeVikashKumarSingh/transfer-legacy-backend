@@ -6,7 +6,8 @@ mod tests {
     #[test]
     fn test_release_record_model_construction() {
         let release_id = Uuid::new_v4();
-        let payload_hash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string();
+        let payload_hash =
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string();
 
         let record = ReleaseRecord {
             release_id,

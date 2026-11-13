@@ -37,12 +37,16 @@ pub async fn list_notifications(
     let offset = params.offset.unwrap_or(0).max(0);
     let unread_only = params.unread_only.unwrap_or(false);
 
-    let notifications = list_user_notifications(&state.db, params.user_id, limit, offset, unread_only)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch user notifications: {:?}", e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let notifications =
+        list_user_notifications(&state.db, params.user_id, limit, offset, unread_only)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch user notifications: {:?}", e);
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     let unread_count = count_unread_notifications(&state.db, params.user_id)
         .await
@@ -218,7 +222,8 @@ pub async fn test_push(
     let push_payload = PushNotificationPayload {
         user_id: payload.user_id,
         title: "Transfer Legacy Handshake".to_string(),
-        message: "Your signal receiver is verified. Institutional protocol alerts are enabled.".to_string(),
+        message: "Your signal receiver is verified. Institutional protocol alerts are enabled."
+            .to_string(),
         action_url: Some(format!("{}/settings", config.app_url)),
         data: Some(serde_json::json!({
             "type": "verification_test",

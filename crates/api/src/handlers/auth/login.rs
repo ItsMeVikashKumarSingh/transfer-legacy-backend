@@ -3,8 +3,8 @@ use axum::{http::HeaderMap, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 use crate::db::queries::auth::{fetch_opaque_record, fetch_user_keys_by_email};
 use crate::errors::{ApiError, SuccessEnvelope};
@@ -299,15 +299,15 @@ pub async fn lookup_user_id(
         r#"SELECT u.id 
         FROM auth.users u 
         INNER JOIN auth_ext.opaque_records o ON u.id = o.user_id 
-        WHERE u.email = $1 AND o.is_deleted = false"#
+        WHERE u.email = $1 AND o.is_deleted = false"#,
     )
-        .bind(&payload.email)
-        .fetch_optional(state.db())
-        .await
-        .map_err(|e| {
-            tracing::error!("Database error looking up user ID: {:?}", e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    .bind(&payload.email)
+    .fetch_optional(state.db())
+    .await
+    .map_err(|e| {
+        tracing::error!("Database error looking up user ID: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let user_id = row.ok_or_else(|| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)

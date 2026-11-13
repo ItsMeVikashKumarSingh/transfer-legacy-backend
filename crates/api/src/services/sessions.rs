@@ -31,7 +31,10 @@ pub fn verify_session_token(config: &Config, token: &str) -> Result<Authenticate
     verify_session_token_with_secret(&config.jwt_secret, token)
 }
 
-pub fn issue_session_token_with_secret(jwt_secret: &str, user_id: Uuid) -> Result<String, SessionError> {
+pub fn issue_session_token_with_secret(
+    jwt_secret: &str,
+    user_id: Uuid,
+) -> Result<String, SessionError> {
     let exp = OffsetDateTime::now_utc().unix_timestamp() + 3600;
     let claims = SessionClaims {
         sub: user_id.to_string(),
@@ -45,7 +48,10 @@ pub fn issue_session_token_with_secret(jwt_secret: &str, user_id: Uuid) -> Resul
     .map_err(|_| SessionError::Encode)
 }
 
-pub fn verify_session_token_with_secret(jwt_secret: &str, token: &str) -> Result<AuthenticatedUser, AppError> {
+pub fn verify_session_token_with_secret(
+    jwt_secret: &str,
+    token: &str,
+) -> Result<AuthenticatedUser, AppError> {
     let validation = Validation::default();
     let token_data = decode::<SessionClaims>(
         token,

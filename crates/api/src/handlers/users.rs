@@ -55,22 +55,37 @@ pub async fn presign_avatar_upload(
         _ => "png",
     };
 
-    let object_key = format!("avatars/{}/avatar_{}.{}", payload.user_id, Uuid::new_v4(), safe_ext);
+    let object_key = format!(
+        "avatars/{}/avatar_{}.{}",
+        payload.user_id,
+        Uuid::new_v4(),
+        safe_ext
+    );
     let bucket = &config.b2_public_assets_bucket_name;
 
-    let upload_url = b2::presign_put_to_bucket(&config, bucket, &object_key, &payload.content_type, 900)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to generate avatar presigned PUT URL: {:?}", e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let upload_url =
+        b2::presign_put_to_bucket(&config, bucket, &object_key, &payload.content_type, 900)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to generate avatar presigned PUT URL: {:?}", e);
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     // Determine public URL
     let public_url = if config.b2_endpoint_url.contains("://") {
-        let endpoint_clean = config.b2_endpoint_url.trim_start_matches("https://").trim_start_matches("http://");
+        let endpoint_clean = config
+            .b2_endpoint_url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://");
         format!("https://{}.{}/{}", bucket, endpoint_clean, object_key)
     } else {
-        format!("https://{}.{}/{}", bucket, config.b2_endpoint_url, object_key)
+        format!(
+            "https://{}.{}/{}",
+            bucket, config.b2_endpoint_url, object_key
+        )
     };
 
     Ok(success(
@@ -173,12 +188,10 @@ pub async fn get_avatar(
 ) -> Result<Json<SuccessEnvelope<GetAvatarResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
-    let avatar_url = fetch_user_avatar(&state.db, user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch avatar_url: {:?}", e);
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+    let avatar_url = fetch_user_avatar(&state.db, user_id).await.map_err(|e| {
+        tracing::error!("Failed to fetch avatar_url: {:?}", e);
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     Ok(success(&rid, GetAvatarResponse { avatar_url }))
 }

@@ -478,7 +478,7 @@ pub async fn update_user_status(
         ON CONFLICT (user_id) DO UPDATE SET
             status = EXCLUDED.status,
             updated_at = now()
-        "#
+        "#,
     )
     .bind(user_id)
     .bind(status)
@@ -495,7 +495,7 @@ pub async fn update_user_plan(pool: &PgPool, user_id: Uuid, plan: &str) -> Resul
         ON CONFLICT (user_id) DO UPDATE SET
             plan_tier = EXCLUDED.plan_tier,
             updated_at = now()
-        "#
+        "#,
     )
     .bind(user_id)
     .bind(plan)
@@ -723,4 +723,3 @@ pub async fn validate_coupon_db(
         format!("{}% discount applied successfully", discount_percent),
     ))
 }
-
