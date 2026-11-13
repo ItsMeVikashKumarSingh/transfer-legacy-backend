@@ -5,18 +5,23 @@ use transfer_legacy_shared_types::models::auth::{
     RegisterFinishRequest, RegisterFinishResponse, RegisterInitRequest, RegisterInitResponse,
 };
 use transfer_legacy_shared_types::models::vault::{
-    CreateItemRequest, CreateItemResponse, DeleteItemResponse, GetItemResponse, ItemSummary,
-    ListItemsResponse,
+    CreateItemRequest, CreateItemResponse, DeleteItemResponse, GetItemResponse, ListItemsResponse,
 };
 use uuid::Uuid;
 
-async fn get_auth_token(client: &mut CryptoClient, user_id: Uuid, password: &str) -> String {
+async fn get_auth_token(
+    client: &mut CryptoClient,
+    user_id: Uuid,
+    email: &str,
+    password: &str,
+) -> String {
     // 1. Registration Init
     let (reg_state, reg_req) = crate::tests::test_utils::test_client_register_init(password);
     let reg_init_req = RegisterInitRequest {
         user_id,
         registration_request: reg_req,
-        credential_identifier: None,
+        credential_identifier: Some(email.to_string()),
+        verification_token: "test-bypass-token".to_string(),
     };
     let reg_init_res: RegisterInitResponse = client
         .post_aead("/v1/auth/register/init", &reg_init_req)
@@ -76,10 +81,8 @@ async fn test_vault_lifecycle() {
 
     let user_id = Uuid::new_v4();
     let email = format!("vault-test-{}@example.com", user_id);
-    crate::tests::test_utils::create_test_user(&ctx.db, user_id, &email).await;
-
     let password = "VaultPassword123!";
-    let _token = get_auth_token(&mut client, user_id, password).await;
+    let _token = get_auth_token(&mut client, user_id, &email, password).await;
 
     // --- 1. Create Vault Item ---
     let ciphertext_raw = b"secret data";

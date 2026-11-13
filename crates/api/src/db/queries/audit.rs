@@ -12,6 +12,7 @@ pub struct AuditEventRow {
     pub created_at: DateTime<Utc>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_audit_event(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,

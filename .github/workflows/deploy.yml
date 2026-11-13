@@ -2,13 +2,11 @@ name: Deploy
 
 on:
   push:
-    branches:
-      - master
-      - staging
     tags:
       - "v*"
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ghcr.io
   # Use lowercase for registry names
   API_IMAGE_NAME: itsmevikashkumarsingh/transfer-legacy-backend/transfer-legacy-api
@@ -17,7 +15,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || contains(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       packages: write

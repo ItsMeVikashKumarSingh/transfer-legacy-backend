@@ -653,6 +653,32 @@ Both GDPR endpoints use AEAD request + AEAD response and require idempotency.
 
 ---
 
+## Serverless Jobs Endpoints
+
+These endpoints are used in serverless mode to trigger background tasks. They must be protected by the `TL_CRON_SECRET` bearer token.
+
+### `POST /v1/jobs/heartbeat-eval`
+- Auth: `Authorization: Bearer <TL_CRON_SECRET>`
+- Purpose: Scans for policies that have missed heartbeats and transitions them to `pending` or `grace` states.
+- Response: `SuccessEnvelope`
+
+### `POST /v1/jobs/daily-anchor`
+- Auth: `Authorization: Bearer <TL_CRON_SECRET>`
+- Purpose: Generates a signed anchor of the current audit head and stores it in B2 for long-term tamper-evidence.
+- Response: `SuccessEnvelope`
+
+### `POST /v1/jobs/conflict-eval`
+- Auth: `Authorization: Bearer <TL_CRON_SECRET>`
+- Purpose: Scans for overlapping or conflicting claims and flags them for manual review.
+- Response: `SuccessEnvelope`
+
+### `POST /v1/jobs/delivery-eval`
+- Auth: `Authorization: Bearer <TL_CRON_SECRET>`
+- Purpose: Scans for claims that have passed their conflict hold period and initiates delivery.
+- Response: `SuccessEnvelope`
+
+---
+
 ## Error Codes
 
 Current application error codes:

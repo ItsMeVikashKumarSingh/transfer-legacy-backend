@@ -91,7 +91,7 @@ pub async fn stepup_verify(
 
     if challenge.consumed_at.is_some() || challenge.expires_at < Utc::now() {
         return Err(ApiError::app_with_request_id(
-            transfer_legacy_shared_types::AppError::Unauthorized,
+            transfer_legacy_shared_types::AppError::OtpExpired,
             &rid,
         ));
     }
@@ -143,7 +143,7 @@ pub async fn stepup_verify(
 
     if !valid {
         return Err(ApiError::app_with_request_id(
-            transfer_legacy_shared_types::AppError::Unauthorized,
+            transfer_legacy_shared_types::AppError::OtpInvalid,
             &rid,
         ));
     }

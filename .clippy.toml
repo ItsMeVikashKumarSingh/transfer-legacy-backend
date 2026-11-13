@@ -1,2 +1,2 @@
-# Warn on all lints by default
-warn-on-all-lints = true
+# Clippy configuration
+# Lint levels are managed via Cargo.toml

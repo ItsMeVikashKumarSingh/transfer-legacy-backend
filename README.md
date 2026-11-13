@@ -11,11 +11,11 @@ attestation workflows, and tamper-evident audit trails.
 - Strict policy state machine enforced at the DB layer
 
 ## Repository Layout
-- `crates/api` — Axum HTTP API service
-- `crates/worker` — Background jobs and schedulers
+- `crates/api` — Axum HTTP API service (supports VPS & Vercel Serverless)
+- `crates/worker` — Background jobs and schedulers (VPS-only, legacy)
 - `crates/crypto-core` — Canonical crypto utilities (shared)
 - `crates/shared-types` — Domain models and error types
-- `migrations` — SQL migrations (schemas, triggers, policies)
+- `migrations` — SQL migrations (schemas, triggers, policies, and serverless cron)
 - `docs` — ADRs and runbooks
 - `rules` — Non-negotiable engineering rules
 
@@ -23,16 +23,19 @@ attestation workflows, and tamper-evident audit trails.
 1. Read `project_detail.md` for canonical requirements.
 2. Follow `DEVELOPMENT_PLAN.md` phases and acceptance criteria.
 3. Review all files in `rules/` before making changes.
+4. Deployment instructions for both VPS and Serverless are in `DEPLOYMENT_GUIDE.md`.
 
 ## Instance Compatibility
 - Support matrix: `docs/infra/INSTANCE_SUPPORT_MATRIX.md`
-- Tier 1 (release-blocking): Linux `amd64` and Linux `arm64`
+- Tier 1 (release-blocking): Linux `amd64`, Linux `arm64`, and **Vercel Serverless (via vercel-rust)**
 - Tier 2: other Linux shapes that pass smoke and critical security tests
 - Tier 3: experimental/best-effort targets
 
 ## Local Setup (Development)
 - Configure `.env.local` with required variables.
-- Run API and worker containers via Docker Compose (see `infra/`).
+- Set `TL_SERVERLESS=true` to test the stateless serverless flow locally.
+- Run API via `cargo run -p transfer-legacy-api`.
+- For VPS mode, use Docker Compose in `infra/` to start OpenBao and Redis.
 - Internal-only endpoints (`/metrics`, `/v1/openapi.json`, `/v1/docs`) can be protected with `TL_INTERNAL_API_TOKEN`.
 - Runtime profiles are available under `infra/profiles/`.
 - Provider-neutral environment templates are available under `infra/environments/`.
@@ -43,16 +46,17 @@ attestation workflows, and tamper-evident audit trails.
 - Postman collection: `postman/Transfer-Legacy.postman_collection.json`
 - Postman environment: `postman/Transfer-Legacy.postman_environment.json`
 - Internal routes require `x-internal-token` if `TL_INTERNAL_API_TOKEN` is configured.
+- **Serverless Jobs**: Background tasks are triggered via `POST /v1/jobs/*` (see `crates/api/src/handlers/jobs.rs`).
 
 ## Postman Quick Start
 1. Import `postman/Transfer-Legacy.postman_collection.json`.
 2. Import `postman/Transfer-Legacy.postman_environment.json`.
-3. Set environment values like `baseUrl`, `xIdempotencyKey`, `xSeq`, `xTimestamp`, `deviceId`, and auth tokens.
+3. Set environment values like `baseUrl`, `xIdempotencyKey`, `xSeq`, `xTimestamp`, `deviceId`, `cronSecret`, and auth tokens.
 4. For AEAD-protected routes, send encrypted payload envelope fields: `nonce` and `ciphertext`.
 
 ## Security & Compliance
 - Audit events are append-only and chain-verified.
-- All signing uses OpenBao Transit (no cloud KMS dependency).
+- All signing uses **OpenBao Transit** (VPS) or **InMemorySigner (Ed25519)** (Serverless).
 - B2 is used for encrypted attachments and audit anchors.
 - Security scans run via GitHub Actions (`cargo deny`, `cargo audit`, semgrep, gitleaks, trivy).
 - Rules compliance is enforced in CI via `.github/workflows/rules-compliance.yml`.

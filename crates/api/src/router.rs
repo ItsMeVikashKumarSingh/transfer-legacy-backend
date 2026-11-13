@@ -1,7 +1,7 @@
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::middleware::{from_fn, from_fn_with_state};
 use axum::{
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use std::time::Duration;
@@ -19,7 +19,7 @@ use crate::state::AppState;
 pub fn create_router(config: &Config, state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(config.allowed_origins.clone()))
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
         .allow_headers([
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
@@ -28,7 +28,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             HeaderName::from_static("x-timestamp"),
             HeaderName::from_static("x-device-id"),
             HeaderName::from_static("x-idempotency-key"),
-        ]);
+        ])
+        .allow_credentials(true);
 
     let security_headers = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -63,6 +64,14 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .layer(crate::middleware::sentry_layer::SentryLayer::new());
 
     let auth_routes = Router::new()
+        .route(
+            "/register/send-otp",
+            post(crate::handlers::auth::register_send_otp),
+        )
+        .route(
+            "/register/verify-otp",
+            post(crate::handlers::auth::register_verify_otp),
+        )
         .route("/register/init", post(crate::handlers::auth::register_init))
         .route(
             "/register/finish",
@@ -70,11 +79,17 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         )
         .route("/login/init", post(crate::handlers::auth::login_init))
         .route("/login/finish", post(crate::handlers::auth::login_finish))
+        .route("/user-id", post(crate::handlers::auth::lookup_user_id))
+        .route("/user-keys", post(crate::handlers::auth::lookup_user_keys))
         .route("/logout", post(crate::handlers::auth::logout))
         .route("/refresh", post(crate::handlers::auth::refresh))
         .route(
             "/password/reset/request",
             post(crate::handlers::auth::password_reset_request),
+        )
+        .route(
+            "/password/reset/init",
+            post(crate::handlers::auth::password_reset_init),
         )
         .route(
             "/password/reset/confirm",
@@ -115,6 +130,11 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/", post(crate::handlers::devices::list))
         .route("/:device_id", delete(crate::handlers::devices::revoke));
 
+    let user_auth_layer = from_fn_with_state(
+        state.clone(),
+        crate::middleware::user_auth::user_authentication,
+    );
+
     let vault_routes = Router::new()
         .route("/items", post(crate::handlers::vault::create_item))
         .route(
@@ -126,6 +146,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             "/items/delete",
             post(crate::handlers::vault::delete_item_handler),
         )
+        .route(
+            "/items/update",
+            post(crate::handlers::vault::update_item_handler),
+        )
         .route("/shares", post(crate::handlers::vault::create_share))
         .route(
             "/shares/list",
@@ -135,10 +159,48 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             "/shares/revoke",
             post(crate::handlers::vault::revoke_share_handler),
         )
-        .route("/migrate", post(crate::handlers::vault::migrate_crypto));
+        .route("/migrate", post(crate::handlers::vault::migrate_crypto))
+        .route(
+            "/items/attachments/presign",
+            post(crate::handlers::vault::items::presign_attachment_upload),
+        )
+        .route(
+            "/items/attachments/confirm",
+            post(crate::handlers::vault::items::confirm_attachment_upload),
+        )
+        .route(
+            "/items/attachments/list",
+            post(crate::handlers::vault::items::list_attachments),
+        )
+        .route(
+            "/items/attachments/download",
+            post(crate::handlers::vault::items::download_attachment),
+        )
+        .route(
+            "/items/attachments/delete",
+            post(crate::handlers::vault::items::delete_attachment),
+        )
+        .layer(user_auth_layer.clone());
+
+    let user_routes = Router::new()
+        .route(
+            "/avatar/presign",
+            post(crate::handlers::users::presign_avatar_upload),
+        )
+        .route(
+            "/avatar/confirm",
+            post(crate::handlers::users::confirm_avatar_upload),
+        )
+        .route("/avatar", delete(crate::handlers::users::delete_avatar))
+        .layer(user_auth_layer.clone())
+        .route("/:user_id/avatar", get(crate::handlers::users::get_avatar));
 
     let inheritance_routes = Router::new()
         .route("/policy", put(crate::handlers::inheritance::upsert_policy))
+        .route(
+            "/policy/get",
+            post(crate::handlers::inheritance::get_policy_handler),
+        )
         .route("/heartbeat", post(crate::handlers::inheritance::heartbeat))
         .route(
             "/policy/:policy_id/invite",
@@ -182,40 +244,135 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
     let gdpr_routes = Router::new()
         .route("/export", post(crate::handlers::gdpr::export_gdpr))
         .route("/erase", post(crate::handlers::gdpr::erase_gdpr));
-        
+
+    let ai_routes = Router::new()
+        .route("/planner/chat", post(crate::handlers::ai::planner_chat_handler));
+
+    let notification_routes = Router::new()
+        .route("/", get(crate::handlers::notifications::list_notifications))
+        .route(
+            "/:id/read",
+            patch(crate::handlers::notifications::mark_read),
+        )
+        .route(
+            "/read-all",
+            post(crate::handlers::notifications::mark_all_read),
+        )
+        .route(
+            "/:id",
+            delete(crate::handlers::notifications::delete_notification),
+        )
+        .route(
+            "/preferences",
+            get(crate::handlers::notifications::get_preferences)
+                .put(crate::handlers::notifications::update_preferences),
+        )
+        .route(
+            "/test-push",
+            post(crate::handlers::notifications::test_push),
+        );
+
     let app_routes = Router::new()
         .route("/branding", get(crate::handlers::app::get_branding))
         .route("/content/:slug", get(crate::handlers::app::get_content))
         .route("/waitlist", post(crate::handlers::app::waitlist_signup))
         .route(
-            "/branding",
-            put(crate::handlers::app::update_branding_handler)
-                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
+            "/contact",
+            get(crate::handlers::app::get_contact_config_handler),
         )
         .route(
-            "/content",
-            put(crate::handlers::app::update_content_handler)
-                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
+            "/contact/message",
+            post(crate::handlers::app::submit_contact_message_handler),
         )
+        .route("/plans", get(crate::handlers::ops::list_plans_handler))
         .route(
-            "/waitlist",
-            get(crate::handlers::app::list_waitlist_entries_handler)
-                .layer(from_fn_with_state(state.clone(), crate::middleware::internal_auth::administrative_auth)),
+            "/coupons/validate",
+            post(crate::handlers::ops::validate_coupon_handler),
         );
 
     let protected_ops_routes = Router::new()
-        .route("/change-password", post(crate::handlers::ops::change_password_handler))
+        .route(
+            "/change-password",
+            post(crate::handlers::ops::change_password_handler),
+        )
         .route("/admins", get(crate::handlers::ops::list_admins_handler))
         .route("/admins", post(crate::handlers::ops::create_admin_handler))
-        .route("/admins/:id", delete(crate::handlers::ops::delete_admin_handler))
+        .route(
+            "/admins/:id",
+            delete(crate::handlers::ops::delete_admin_handler),
+        )
         .route("/roles", get(crate::handlers::ops::list_roles_handler))
         .route("/roles", post(crate::handlers::ops::create_role_handler))
         .route("/roles/:id", put(crate::handlers::ops::update_role_handler))
-        .route("/roles/:id", delete(crate::handlers::ops::delete_role_handler))
-        .route("/waitlist", get(crate::handlers::ops::list_waitlist_handler))
+        .route(
+            "/roles/:id",
+            delete(crate::handlers::ops::delete_role_handler),
+        )
+        .route("/users", get(crate::handlers::ops::list_users_handler))
+        .route(
+            "/users/:id/status",
+            put(crate::handlers::ops::update_user_status_handler),
+        )
+        .route(
+            "/users/:id/plan",
+            put(crate::handlers::ops::update_user_plan_handler),
+        )
+        .route(
+            "/plans",
+            get(crate::handlers::ops::list_plans_handler)
+                .post(crate::handlers::ops::create_plan_handler),
+        )
+        .route(
+            "/plans/:id",
+            put(crate::handlers::ops::update_plan_handler)
+                .delete(crate::handlers::ops::delete_plan_handler),
+        )
+        .route(
+            "/coupons",
+            get(crate::handlers::ops::list_coupons_handler)
+                .post(crate::handlers::ops::create_coupon_handler),
+        )
+        .route(
+            "/coupons/:id/toggle",
+            post(crate::handlers::ops::toggle_coupon_handler),
+        )
+        .route(
+            "/coupons/:id",
+            delete(crate::handlers::ops::delete_coupon_handler),
+        )
+        .route(
+            "/waitlist",
+            get(crate::handlers::ops::list_waitlist_handler),
+        )
         .route("/branding", get(crate::handlers::ops::get_branding_handler))
-        .route("/branding", put(crate::handlers::ops::update_branding_handler))
-        .route("/content", put(crate::handlers::ops::update_content_ops_handler))
+        .route(
+            "/branding",
+            put(crate::handlers::ops::update_branding_handler),
+        )
+        .route("/contact", get(crate::handlers::ops::get_contact_handler))
+        .route(
+            "/contact",
+            put(crate::handlers::ops::update_contact_handler),
+        )
+        .route(
+            "/contact/messages",
+            get(crate::handlers::ops::list_contact_messages_handler),
+        )
+        .route(
+            "/contact/messages/:id",
+            delete(crate::handlers::ops::delete_contact_message_handler),
+        )
+        .route(
+            "/content",
+            put(crate::handlers::ops::update_content_ops_handler),
+        )
+        .route("/pages", get(crate::handlers::ops::list_pages_ops))
+        .route("/pages/:slug", get(crate::handlers::ops::get_page_ops))
+        .route("/pages/:slug", put(crate::handlers::ops::upsert_page_ops))
+        .route(
+            "/pages/:slug",
+            delete(crate::handlers::ops::delete_page_ops),
+        )
         .route("/reviews", get(crate::handlers::ops::list_reviews))
         .route("/reviews/:review_id", get(crate::handlers::ops::get_review))
         .route(
@@ -236,24 +393,51 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/login", post(crate::handlers::ops::login_handler))
         .nest("/", protected_ops_routes);
 
+    let jobs_routes = Router::new()
+        .route(
+            "/heartbeat-eval",
+            post(crate::handlers::jobs::heartbeat_eval),
+        )
+        .route("/audit-anchor", post(crate::handlers::jobs::audit_anchor))
+        .route("/release-eval", post(crate::handlers::jobs::release_eval))
+        .route(
+            "/conflict-check",
+            post(crate::handlers::jobs::conflict_check),
+        )
+        .route(
+            "/release-delivery",
+            post(crate::handlers::jobs::release_delivery),
+        );
+
+    let api_routes = Router::new()
+        .route("/server-capabilities", get(capabilities))
+        .route("/openapi.json", get(crate::handlers::openapi::openapi_json))
+        .route("/docs", get(crate::handlers::openapi::docs_ui))
+        .route("/plans", get(crate::handlers::ops::list_plans_handler))
+        .route(
+            "/coupons/validate",
+            post(crate::handlers::ops::validate_coupon_handler),
+        )
+        .nest("/auth", auth_routes)
+        .nest("/devices", device_routes)
+        .nest("/users", user_routes)
+        .nest("/vault", vault_routes)
+        .nest("/inheritance", inheritance_routes)
+        .nest("/claims", claims_routes)
+        .nest("/audit", audit_routes)
+        .nest("/gdpr", gdpr_routes)
+        .nest("/ai", ai_routes)
+        .nest("/notifications", notification_routes)
+        .nest("/app", app_routes)
+        .nest("/ops", ops_routes)
+        .nest("/jobs", jobs_routes);
+
     Router::new()
+        .route("/", get(|| async { "ok" }))
         .route("/health", get(health))
         .route("/metrics", get(crate::handlers::metrics::metrics))
-        .route("/v1/server-capabilities", get(capabilities))
-        .route(
-            "/v1/openapi.json",
-            get(crate::handlers::openapi::openapi_json),
-        )
-        .route("/v1/docs", get(crate::handlers::openapi::docs_ui))
-        .nest("/v1/auth", auth_routes)
-        .nest("/v1/devices", device_routes)
-        .nest("/v1/vault", vault_routes)
-        .nest("/v1/inheritance", inheritance_routes)
-        .nest("/v1/claims", claims_routes)
-        .nest("/v1/audit", audit_routes)
-        .nest("/v1/gdpr", gdpr_routes)
-        .nest("/v1/app", app_routes)
-        .nest("/v1/ops", ops_routes)
+        .nest("/v1", api_routes.clone())
+        .nest("/", api_routes)
         .with_state(state)
         .layer(from_fn(crate::middleware::metrics::metrics_middleware))
         .layer(middleware_stack)

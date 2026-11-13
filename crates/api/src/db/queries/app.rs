@@ -1,11 +1,14 @@
-use sqlx::{Postgres, Pool};
-use transfer_legacy_shared_types::models::app::{BrandingConfig, AppContent, WaitlistEntry, WaitlistSignupRequest, ContactConfig, ContactMessage};
+use sqlx::{Pool, Postgres};
+use transfer_legacy_shared_types::models::app::{
+    AppContent, BrandingConfig, CmsPage, ContactConfig, ContactMessage, WaitlistEntry,
+    WaitlistSignupRequest,
+};
 use uuid::Uuid;
 
 pub async fn fetch_branding(pool: &Pool<Postgres>) -> Result<BrandingConfig, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
-        "SELECT brand_name, logo_url, support_email, support_phone, support_address, waitlist_enabled, theme_config FROM app.settings WHERE id = 1",
+        "SELECT brand_name, logo_url, support_email, support_phone, support_address, waitlist_enabled, maintenance_mode, registration_enabled, theme_config FROM app.settings WHERE id = 1",
     )
     .fetch_one(pool)
     .await?;
@@ -17,6 +20,8 @@ pub async fn fetch_branding(pool: &Pool<Postgres>) -> Result<BrandingConfig, sql
         support_phone: row.get("support_phone"),
         support_address: row.get("support_address"),
         waitlist_enabled: row.get("waitlist_enabled"),
+        maintenance_mode: row.get("maintenance_mode"),
+        registration_enabled: row.get("registration_enabled"),
         theme_config: row.get("theme_config"),
     })
 }
@@ -26,7 +31,7 @@ pub async fn update_branding(
     config: BrandingConfig,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE app.settings SET brand_name = $1, logo_url = $2, support_email = $3, support_phone = $4, support_address = $5, waitlist_enabled = $6, theme_config = $7, updated_at = now() WHERE id = 1",
+        "UPDATE app.settings SET brand_name = $1, logo_url = $2, support_email = $3, support_phone = $4, support_address = $5, waitlist_enabled = $6, maintenance_mode = $7, registration_enabled = $8, theme_config = $9, updated_at = now() WHERE id = 1",
     )
     .bind(config.brand_name)
     .bind(config.logo_url)
@@ -34,6 +39,8 @@ pub async fn update_branding(
     .bind(config.support_phone)
     .bind(config.support_address)
     .bind(config.waitlist_enabled)
+    .bind(config.maintenance_mode)
+    .bind(config.registration_enabled)
     .bind(config.theme_config)
     .execute(pool)
     .await?;
@@ -97,7 +104,9 @@ pub async fn insert_contact_message(
     Ok(row.get::<Uuid, _>("id"))
 }
 
-pub async fn list_contact_messages(pool: &Pool<Postgres>) -> Result<Vec<ContactMessage>, sqlx::Error> {
+pub async fn list_contact_messages(
+    pool: &Pool<Postgres>,
+) -> Result<Vec<ContactMessage>, sqlx::Error> {
     use sqlx::Row;
     let rows = sqlx::query(
         "SELECT id, name, email, subject, message, metadata, is_read, created_at FROM app.contact_messages ORDER BY created_at DESC",
@@ -105,19 +114,33 @@ pub async fn list_contact_messages(pool: &Pool<Postgres>) -> Result<Vec<ContactM
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| ContactMessage {
-        id: r.get("id"),
-        name: r.get("name"),
-        email: r.get("email"),
-        subject: r.get("subject"),
-        message: r.get("message"),
-        metadata: r.get("metadata"),
-        is_read: r.get("is_read"),
-        created_at: r.get("created_at"),
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| ContactMessage {
+            id: r.get("id"),
+            name: r.get("name"),
+            email: r.get("email"),
+            subject: r.get("subject"),
+            message: r.get("message"),
+            metadata: r.get("metadata"),
+            is_read: r.get("is_read"),
+            created_at: r.get("created_at"),
+        })
+        .collect())
 }
 
-pub async fn fetch_app_content(pool: &Pool<Postgres>, slug: &str) -> Result<AppContent, sqlx::Error> {
+pub async fn delete_contact_message(pool: &Pool<Postgres>, id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM app.contact_messages WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn fetch_app_content(
+    pool: &Pool<Postgres>,
+    slug: &str,
+) -> Result<AppContent, sqlx::Error> {
     use sqlx::Row;
     let row = sqlx::query(
         "SELECT slug, body, version FROM app.content WHERE slug = $1 AND is_deleted = false",
@@ -152,10 +175,14 @@ pub async fn update_app_content(
 pub async fn insert_waitlist_signup(
     pool: &Pool<Postgres>,
     req: WaitlistSignupRequest,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<(Uuid, i64, bool), sqlx::Error> {
     use sqlx::Row;
+
+    // 1. Try to insert or update
     let row = sqlx::query(
-        "INSERT INTO app.waitlist (email, name, meta) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET updated_at = now() RETURNING id",
+        "INSERT INTO app.waitlist (email, name, meta) VALUES ($1, $2, $3) 
+         ON CONFLICT (email) DO UPDATE SET updated_at = now() 
+         RETURNING id, created_at, (xmax = 0) AS is_new",
     )
     .bind(req.email)
     .bind(req.name)
@@ -163,10 +190,26 @@ pub async fn insert_waitlist_signup(
     .fetch_one(pool)
     .await?;
 
-    Ok(row.get::<Uuid, _>("id"))
+    let id: Uuid = row.get("id");
+    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+    let is_new: bool = row.get("is_new");
+
+    // 2. Calculate position (count of entries with created_at <= this entry)
+    let pos_row = sqlx::query(
+        "SELECT COUNT(*) FROM app.waitlist WHERE created_at <= $1 AND is_deleted = false",
+    )
+    .bind(created_at)
+    .fetch_one(pool)
+    .await?;
+
+    let position: i64 = pos_row.get(0);
+
+    Ok((id, position, is_new))
 }
 
-pub async fn list_waitlist_entries(pool: &Pool<Postgres>) -> Result<Vec<WaitlistEntry>, sqlx::Error> {
+pub async fn list_waitlist_entries(
+    pool: &Pool<Postgres>,
+) -> Result<Vec<WaitlistEntry>, sqlx::Error> {
     use sqlx::Row;
     let rows = sqlx::query(
         "SELECT id, email, name, meta, created_at FROM app.waitlist WHERE is_deleted = false ORDER BY created_at DESC",
@@ -186,4 +229,101 @@ pub async fn list_waitlist_entries(pool: &Pool<Postgres>) -> Result<Vec<Waitlist
         .collect();
 
     Ok(entries)
+}
+
+pub async fn list_cms_pages(
+    pool: &Pool<Postgres>,
+    only_published: bool,
+) -> Result<Vec<CmsPage>, sqlx::Error> {
+    use sqlx::Row;
+    let query = if only_published {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE is_published = true ORDER BY updated_at DESC"
+    } else {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages ORDER BY updated_at DESC"
+    };
+
+    let rows = sqlx::query(query).fetch_all(pool).await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| CmsPage {
+            id: r.get("id"),
+            title: r.get("title"),
+            slug: r.get("slug"),
+            description: r.get("description"),
+            category: r.get("category"),
+            body: r.get("body"),
+            is_published: r.get("is_published"),
+            seo_meta: r.get("seo_meta"),
+            updated_by: r.get("updated_by"),
+            created_at: r.get("created_at"),
+            updated_at: r.get("updated_at"),
+        })
+        .collect())
+}
+
+pub async fn fetch_cms_page_by_slug(
+    pool: &Pool<Postgres>,
+    slug: &str,
+    only_published: bool,
+) -> Result<CmsPage, sqlx::Error> {
+    use sqlx::Row;
+    let query = if only_published {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE slug = $1 AND is_published = true"
+    } else {
+        "SELECT id, title, slug, description, category, body, is_published, seo_meta, updated_by, created_at, updated_at FROM app.cms_pages WHERE slug = $1"
+    };
+
+    let row = sqlx::query(query).bind(slug).fetch_one(pool).await?;
+
+    Ok(CmsPage {
+        id: row.get("id"),
+        title: row.get("title"),
+        slug: row.get("slug"),
+        description: row.get("description"),
+        category: row.get("category"),
+        body: row.get("body"),
+        is_published: row.get("is_published"),
+        seo_meta: row.get("seo_meta"),
+        updated_by: row.get("updated_by"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+pub async fn upsert_cms_page(pool: &Pool<Postgres>, page: CmsPage) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO app.cms_pages (id, title, slug, description, category, body, is_published, seo_meta, updated_by, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) 
+         ON CONFLICT (slug) DO UPDATE SET 
+            title = EXCLUDED.title, 
+            description = EXCLUDED.description, 
+            category = EXCLUDED.category, 
+            body = EXCLUDED.body, 
+            is_published = EXCLUDED.is_published, 
+            seo_meta = EXCLUDED.seo_meta, 
+            updated_by = EXCLUDED.updated_by, 
+            updated_at = now()"
+    )
+    .bind(page.id)
+    .bind(page.title)
+    .bind(page.slug)
+    .bind(page.description)
+    .bind(page.category)
+    .bind(page.body)
+    .bind(page.is_published)
+    .bind(page.seo_meta)
+    .bind(page.updated_by)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_cms_page(pool: &Pool<Postgres>, slug: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM app.cms_pages WHERE slug = $1")
+        .bind(slug)
+        .execute(pool)
+        .await?;
+    Ok(())
 }

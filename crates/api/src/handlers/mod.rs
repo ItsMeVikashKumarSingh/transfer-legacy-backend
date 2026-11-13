@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod app;
 pub mod audit;
 pub mod auth;
@@ -7,9 +8,12 @@ pub mod devices;
 pub mod gdpr;
 pub mod health;
 pub mod inheritance;
+pub mod jobs;
 pub mod metrics;
+pub mod notifications;
 pub mod openapi;
 pub mod ops;
+pub mod users;
 pub mod vault;
 
 pub use capabilities::capabilities;

@@ -1,14 +1,14 @@
+pub mod app;
 pub mod attestation;
 pub mod auth;
 pub mod claim;
 pub mod device;
 pub mod inheritance;
 pub mod item;
+pub mod ops;
 pub mod person;
 pub mod policy;
 pub mod release_record;
 pub mod share;
 pub mod user;
 pub mod vault;
-pub mod app;
-pub mod ops;

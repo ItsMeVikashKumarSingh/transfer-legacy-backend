@@ -5,3 +5,4 @@ pub mod rate_limit;
 pub mod request_id;
 pub mod security_headers;
 pub mod sentry_layer;
+pub mod user_auth;

@@ -2,12 +2,12 @@ use axum::extract::{Extension, State};
 use axum::{http::HeaderMap, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use sha2::{Digest, Sha256};
 
-use crate::db::queries::auth::fetch_opaque_record;
-use crate::errors::{success, ApiError, SuccessEnvelope};
+use crate::db::queries::auth::{fetch_opaque_record, fetch_user_keys_by_email};
+use crate::errors::{ApiError, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::{enforce_rate_limit, require_idempotency};
 use crate::state::AppState;
@@ -38,6 +38,7 @@ pub struct LoginFinishRequest {
 #[derive(Debug, Serialize)]
 pub struct LoginFinishResponse {
     pub user_id: Uuid,
+    pub person_id: Uuid,
     pub session_token: String,
     pub emk_blob: String,
     pub argon2_params: serde_json::Value,
@@ -63,13 +64,33 @@ pub async fn login_init(
     let rate_key = format!("login_init:{}", payload.user_id);
     enforce_rate_limit(&state, &rate_key, 10)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
+            tracing::error!("enforce_rate_limit failed in login_init: {:?}", e);
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::RateLimited, &rid)
         })?;
     let record = fetch_opaque_record(&state.db, payload.user_id)
         .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        .map_err(|e| {
+            if matches!(e, sqlx::Error::RowNotFound) {
+                tracing::warn!(
+                    "fetch_opaque_record: user {} not found in login_init",
+                    payload.user_id
+                );
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::UserNotFound,
+                    &rid,
+                )
+            } else {
+                tracing::error!(
+                    "fetch_opaque_record failed in login_init for user {}: {:?}",
+                    payload.user_id,
+                    e
+                );
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            }
         })?;
 
     let (credential_response, server_state) = login_start(
@@ -77,11 +98,13 @@ pub async fn login_init(
         &payload.credential_request,
         &record.opaque_record,
     )
-    .map_err(|_| {
+    .map_err(|e| {
+        tracing::error!("login_start failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
     })?;
 
-    let state_bytes = serialize_login_state(&server_state).map_err(|_| {
+    let state_bytes = serialize_login_state(&server_state).map_err(|e| {
+        tracing::error!("serialize_login_state failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
     let state_b64 = URL_SAFE_NO_PAD.encode(state_bytes);
@@ -96,18 +119,13 @@ pub async fn login_init(
         state_b64,
     };
 
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
     let key = format!("opaque:login:{}", session_id);
-    let value = serde_json::to_string(&session).map_err(|_| {
+    let value = serde_json::to_string(&session).map_err(|e| {
+        tracing::error!("serde_json::to_string failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
-    let _: () = conn.set_ex(key, value, 300).await.map_err(|_| {
+    state.redis_set_ex(&key, &value, 300).await.map_err(|e| {
+        tracing::error!("Redis set_ex failed in login_init: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
 
@@ -133,15 +151,9 @@ pub async fn login_finish(
     let config = state.config().await;
 
     require_idempotency(&state, &headers).await?;
-    let mut conn = state
-        .redis
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
     let key = format!("opaque:login:{}", payload.session_id);
-    let session_json: Option<String> = conn.get(&key).await.map_err(|_| {
+    let session_json: Option<String> = state.redis_get(&key).await.map_err(|e| {
+        tracing::error!("Redis get failed in login_finish: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
     let session_json = session_json.ok_or_else(|| {
@@ -159,27 +171,101 @@ pub async fn login_finish(
     })?;
 
     opaque_login_finish(server_state, &payload.credential_finalization).map_err(|_| {
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid)
+        ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::InvalidCredentials,
+            &rid,
+        )
     })?;
 
     let record = fetch_opaque_record(&state.db, session.user_id)
         .await
-        .map_err(|_| {
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        .map_err(|e| {
+            tracing::error!(
+                "fetch_opaque_record failed in login_finish for user {}: {:?}",
+                session.user_id,
+                e
+            );
+            if matches!(e, sqlx::Error::RowNotFound) {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::UserNotFound,
+                    &rid,
+                )
+            } else {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            }
         })?;
+
+    let person_id: Uuid =
+        sqlx::query_scalar("SELECT person_id FROM auth_ext.person_user_links WHERE user_id = $1")
+            .bind(session.user_id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to fetch person_id for user {}: {:?}",
+                    session.user_id,
+                    e
+                );
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     let session_token = crate::services::sessions::issue_session_token(&config, session.user_id)
         .map_err(|_| {
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
 
-    let _: () = conn.del(&key).await.map_err(|_| {
+    let _: () = state.redis_del(&key).await.map_err(|e| {
+        tracing::error!("Redis del failed in login_finish: {:?}", e);
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    let client_ip = headers
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+
+    let ip_hash = client_ip.map(|ip| {
+        let mut hasher = Sha256::new();
+        hasher.update(ip.as_bytes());
+        hasher.finalize().to_vec()
+    });
+
+    let payload_json = serde_json::json!({
+        "user_id": session.user_id,
+        "event": "login_success",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    let payload_bytes = serde_json::to_vec(&payload_json).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let payload_hash = hasher.finalize().to_vec();
+
+    let _ = sqlx::query(
+        r#"INSERT INTO audit.events 
+        (event_id, policy_id, event_type, payload_hash, prev_hash, event_hash, actor_id, ip_hash, created_at)
+        VALUES ($1, NULL, $2, $3, NULL, $4, $5, $6, now())"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("auth.user.login_success")
+    .bind(&payload_hash)
+    .bind(&payload_hash)
+    .bind(session.user_id)
+    .bind(ip_hash)
+    .execute(&state.db)
+    .await;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: LoginFinishResponse {
             user_id: session.user_id,
+            person_id,
             session_token,
             emk_blob: URL_SAFE_NO_PAD.encode(record.emk_blob),
             argon2_params: record.argon2_params,
@@ -191,4 +277,88 @@ pub async fn login_finish(
     };
     let aead = wrap_response(&config, &headers, &envelope)?;
     Ok(Json(aead))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserIdLookupRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserIdLookupResponse {
+    pub user_id: Uuid,
+}
+
+pub async fn lookup_user_id(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Json(payload): Json<UserIdLookupRequest>,
+) -> Result<Json<crate::errors::SuccessEnvelope<UserIdLookupResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let row = sqlx::query_scalar::<_, Uuid>(
+        r#"SELECT u.id 
+        FROM auth.users u 
+        INNER JOIN auth_ext.opaque_records o ON u.id = o.user_id 
+        WHERE u.email = $1 AND o.is_deleted = false"#
+    )
+        .bind(&payload.email)
+        .fetch_optional(state.db())
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error looking up user ID: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
+
+    let user_id = row.ok_or_else(|| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::UserNotFound, &rid)
+    })?;
+
+    Ok(Json(crate::errors::SuccessEnvelope {
+        data: UserIdLookupResponse { user_id },
+        request_id: rid,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserKeysLookupRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserKeysLookupResponse {
+    pub user_id: Uuid,
+    pub x25519_pubkey: String,
+    pub kyber768_pubkey: String,
+}
+
+pub async fn lookup_user_keys(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Json(payload): Json<UserKeysLookupRequest>,
+) -> Result<Json<crate::errors::SuccessEnvelope<UserKeysLookupResponse>>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    let keys = fetch_user_keys_by_email(&state.db, &payload.email)
+        .await
+        .map_err(|e| {
+            if matches!(e, sqlx::Error::RowNotFound) {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::NotFound,
+                    &rid,
+                )
+            } else {
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            }
+        })?;
+
+    Ok(Json(crate::errors::SuccessEnvelope {
+        data: UserKeysLookupResponse {
+            user_id: keys.user_id,
+            x25519_pubkey: URL_SAFE_NO_PAD.encode(keys.x25519_pubkey),
+            kyber768_pubkey: URL_SAFE_NO_PAD.encode(keys.kyber768_pubkey),
+        },
+        request_id: rid,
+    }))
 }

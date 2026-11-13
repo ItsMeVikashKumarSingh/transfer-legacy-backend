@@ -1,7 +1,0 @@
-services:
-  api:
-    environment:
-      - TL_ALLOWED_ORIGINS=https://staging.example.com
-  worker:
-    environment:
-      - TL_ALLOWED_ORIGINS=https://staging.example.com

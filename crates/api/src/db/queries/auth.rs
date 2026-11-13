@@ -14,20 +14,52 @@ pub struct OpaqueRecordRow {
     pub schema_version: i32,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ConsentInfo {
+    pub terms_version: Option<String>,
+    pub privacy_version: Option<String>,
+    pub consent_ip_hash: Option<Vec<u8>>,
+    pub consent_user_agent: Option<String>,
+}
+
 pub async fn insert_person_and_link(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     enc_legal_name: Vec<u8>,
     enc_email: Vec<u8>,
+    consent: Option<&ConsentInfo>,
 ) -> Result<Uuid, sqlx::Error> {
     let person_id = Uuid::new_v4();
 
+    let (terms_at, terms_ver, priv_at, priv_ver, ip_hash, ua) = match consent {
+        Some(c) => (
+            c.terms_version.as_ref().map(|_| chrono::Utc::now()),
+            c.terms_version.clone(),
+            c.privacy_version.as_ref().map(|_| chrono::Utc::now()),
+            c.privacy_version.clone(),
+            c.consent_ip_hash.clone(),
+            c.consent_user_agent.clone(),
+        ),
+        None => (None, None, None, None, None, None),
+    };
+
     sqlx::query(
-        "INSERT INTO auth_ext.persons (person_id, enc_legal_name, enc_email) VALUES ($1, $2, $3)",
+        r#"INSERT INTO auth_ext.persons (
+            person_id, enc_legal_name, enc_email,
+            terms_accepted_at, terms_version,
+            privacy_accepted_at, privacy_version,
+            consent_ip_hash, consent_user_agent
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
     )
     .bind(person_id)
     .bind(enc_legal_name)
     .bind(enc_email)
+    .bind(terms_at)
+    .bind(terms_ver)
+    .bind(priv_at)
+    .bind(priv_ver)
+    .bind(ip_hash)
+    .bind(ua)
     .execute(tx.as_mut())
     .await?;
 
@@ -87,4 +119,98 @@ pub async fn fetch_opaque_record(
         crypto_version: row.7,
         schema_version: row.8,
     })
+}
+
+pub async fn update_opaque_record(
+    tx: &mut Transaction<'_, Postgres>,
+    row: &OpaqueRecordRow,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE auth_ext.opaque_records SET
+            opaque_record = $2,
+            emk_blob = $3,
+            argon2_params = $4,
+            ed25519_pubkey = $5,
+            x25519_pubkey = $6,
+            kyber768_pubkey = $7,
+            crypto_version = $8,
+            schema_version = $9,
+            updated_at = now()
+        WHERE user_id = $1"#,
+    )
+    .bind(row.user_id)
+    .bind(&row.opaque_record)
+    .bind(&row.emk_blob)
+    .bind(&row.argon2_params)
+    .bind(&row.ed25519_pubkey)
+    .bind(&row.x25519_pubkey)
+    .bind(&row.kyber768_pubkey)
+    .bind(&row.crypto_version)
+    .bind(row.schema_version)
+    .execute(tx.as_mut())
+    .await?;
+
+    Ok(())
+}
+
+pub struct UserKeysRow {
+    pub user_id: Uuid,
+    pub x25519_pubkey: Vec<u8>,
+    pub kyber768_pubkey: Vec<u8>,
+}
+
+pub async fn fetch_user_keys_by_email(
+    pool: &PgPool,
+    email: &str,
+) -> Result<UserKeysRow, sqlx::Error> {
+    let row = sqlx::query_as::<_, (Uuid, Vec<u8>, Vec<u8>)>(
+        r#"SELECT user_id, x25519_pubkey, kyber768_pubkey 
+        FROM auth_ext.opaque_records 
+        WHERE user_id = (SELECT id FROM auth.users WHERE email = $1)"#,
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(UserKeysRow {
+        user_id: row.0,
+        x25519_pubkey: row.1,
+        kyber768_pubkey: row.2,
+    })
+}
+
+pub async fn update_user_avatar(
+    pool: &PgPool,
+    user_id: Uuid,
+    avatar_url: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE auth_ext.persons p
+        SET avatar_url = $2, updated_at = now()
+        FROM auth_ext.person_user_links pul
+        WHERE pul.person_id = p.person_id AND pul.user_id = $1"#,
+    )
+    .bind(user_id)
+    .bind(avatar_url)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn fetch_user_avatar(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    let row = sqlx::query_as::<_, (Option<String>,)>(
+        r#"SELECT p.avatar_url
+        FROM auth_ext.persons p
+        JOIN auth_ext.person_user_links pul ON pul.person_id = p.person_id
+        WHERE pul.user_id = $1 AND p.is_deleted = false"#,
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.and_then(|r| r.0))
 }

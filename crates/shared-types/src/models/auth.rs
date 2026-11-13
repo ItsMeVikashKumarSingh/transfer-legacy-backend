@@ -6,6 +6,7 @@ pub struct RegisterInitRequest {
     pub user_id: Uuid,
     pub registration_request: String,
     pub credential_identifier: Option<String>,
+    pub verification_token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ pub struct RegisterFinishRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterFinishResponse {
     pub user_id: Uuid,
+    pub person_id: Uuid,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -55,6 +57,7 @@ pub struct LoginFinishRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginFinishResponse {
     pub user_id: Uuid,
+    pub person_id: Uuid,
     pub session_token: String,
     pub emk_blob: String,
     pub argon2_params: serde_json::Value,

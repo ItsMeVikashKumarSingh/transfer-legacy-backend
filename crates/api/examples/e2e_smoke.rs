@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use ed25519_dalek::{Signer, SigningKey};
 use opaque_ke::{
@@ -36,7 +38,8 @@ struct RegisterInitResponse {
 
 #[derive(Debug, Deserialize)]
 struct RegisterFinishResponse {
-    user_id: Uuid,
+    pub user_id: Uuid,
+    pub person_id: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,13 +51,14 @@ struct LoginInitResponse {
 
 #[derive(Debug, Deserialize)]
 struct LoginFinishResponse {
-    user_id: Uuid,
-    session_token: String,
-    emk_blob: String,
-    argon2_params: Value,
-    ed25519_pubkey: String,
-    x25519_pubkey: String,
-    kyber768_pubkey: String,
+    pub user_id: Uuid,
+    pub person_id: Uuid,
+    pub session_token: String,
+    pub emk_blob: String,
+    pub argon2_params: Value,
+    pub ed25519_pubkey: String,
+    pub x25519_pubkey: String,
+    pub kyber768_pubkey: String,
 }
 
 #[derive(Debug, Serialize)]

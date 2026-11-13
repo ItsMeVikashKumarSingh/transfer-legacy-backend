@@ -1,12 +1,20 @@
 [workspace]
 members = [
   "crates/api",
-  "crates/worker",
   "crates/crypto-core",
   "crates/shared-types"
-, "crates/infra-tool"]
+]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
 license = "MIT"
+
+[profile.release]
+opt-level = 2
+codegen-units = 256
+lto = false
+debug = false
+panic = "abort"
+
+

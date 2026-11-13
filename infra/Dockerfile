@@ -19,6 +19,7 @@ WORKDIR /app
 
 ARG BIN_NAME=transfer-legacy-api
 COPY --from=builder /app/target/release/${BIN_NAME} /app/${BIN_NAME}
+COPY --chown=nonroot:nonroot docs/templates /app/docs/templates
 
 USER nonroot:nonroot
 EXPOSE 8080

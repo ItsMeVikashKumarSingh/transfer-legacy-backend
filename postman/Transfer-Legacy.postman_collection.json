@@ -211,6 +211,51 @@
         { "name": "Ops Get Review", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }], "url": "{{baseUrl}}/v1/ops/reviews/{{reviewId}}" } },
         { "name": "Ops Review Decision (AEAD)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "x-seq", "value": "{{xSeq}}" }, { "key": "x-timestamp", "value": "{{xTimestamp}}" }, { "key": "x-device-id", "value": "{{deviceId}}" }, { "key": "x-idempotency-key", "value": "{{xIdempotencyKey}}" }], "body": { "mode": "raw", "raw": "{\n  \"nonce\": \"{{aeadNonce}}\",\n  \"ciphertext\": \"{{aeadCiphertext}}\"\n}" }, "url": "{{baseUrl}}/v1/ops/reviews/{{reviewId}}/decision" } }
       ]
+    },
+    {
+      "name": "Jobs (Serverless)",
+      "item": [
+        {
+          "name": "Heartbeat Eval",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{cronSecret}}" }
+            ],
+            "url": "{{baseUrl}}/v1/jobs/heartbeat-eval"
+          }
+        },
+        {
+          "name": "Daily Anchor",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{cronSecret}}" }
+            ],
+            "url": "{{baseUrl}}/v1/jobs/daily-anchor"
+          }
+        },
+        {
+          "name": "Conflict Eval",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{cronSecret}}" }
+            ],
+            "url": "{{baseUrl}}/v1/jobs/conflict-eval"
+          }
+        },
+        {
+          "name": "Delivery Eval",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{cronSecret}}" }
+            ],
+            "url": "{{baseUrl}}/v1/jobs/delivery-eval"
+          }
+        }
+      ]
     }
   ]
 }

@@ -31,25 +31,28 @@ pub async fn get_presigned_logo_upload(
 
     crate::middleware::internal_auth::ensure_internal_access(&state, &headers)
         .await
-        .map_err(|_| ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Unauthorized, &rid))?;
-    
+        .map_err(|_| {
+            ApiError::app_with_request_id(
+                transfer_legacy_shared_types::AppError::Unauthorized,
+                &rid,
+            )
+        })?;
+
     let config = state.config().await;
 
     let bucket = &config.b2_public_assets_bucket_name;
     let key = format!("branding/{}", req.file_name);
-    
-    let upload_url = crate::services::b2::presign_put_to_bucket(
-        &config,
-        bucket,
-        &key,
-        &req.content_type,
-        3600,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to generate presigned URL: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+
+    let upload_url =
+        crate::services::b2::presign_put_to_bucket(&config, bucket, &key, &req.content_type, 3600)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to generate presigned URL: {:?}", e);
+                ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Internal,
+                    &rid,
+                )
+            })?;
 
     // Standard B2 public URL pattern (though in production this should likely be a CDN URL)
     let public_url = format!("https://{}.{}/{}", bucket, config.b2_endpoint_url, key);

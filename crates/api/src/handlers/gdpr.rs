@@ -4,6 +4,7 @@ use axum::Json;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use sha2::{Digest, Sha256};
 
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
@@ -195,6 +196,30 @@ pub async fn export_gdpr(
         ciphertext_b64: URL_SAFE_NO_PAD.encode(envelope.ciphertext),
     };
 
+    let payload_json = serde_json::json!({
+        "user_id": payload.user_id,
+        "person_id": payload.person_id,
+        "event": "gdpr_export",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    let payload_bytes = serde_json::to_vec(&payload_json).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let payload_hash = hasher.finalize().to_vec();
+
+    let _ = sqlx::query(
+        r#"INSERT INTO audit.events 
+        (event_id, policy_id, event_type, payload_hash, prev_hash, event_hash, actor_id, ip_hash, created_at)
+        VALUES ($1, NULL, $2, $3, NULL, $4, $5, NULL, now())"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("gdpr.user.data_exported")
+    .bind(&payload_hash)
+    .bind(&payload_hash)
+    .bind(payload.user_id)
+    .execute(&state.db)
+    .await;
+
     let envelope = crate::errors::SuccessEnvelope {
         data: response,
         request_id: rid,
@@ -303,9 +328,57 @@ pub async fn erase_gdpr(
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
 
+    let payload_json = serde_json::json!({
+        "user_id": payload.user_id,
+        "person_id": payload.person_id,
+        "event": "gdpr_erasure",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    let payload_bytes = serde_json::to_vec(&payload_json).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let payload_hash = hasher.finalize().to_vec();
+
+    let _ = sqlx::query(
+        r#"INSERT INTO audit.events 
+        (event_id, policy_id, event_type, payload_hash, prev_hash, event_hash, actor_id, ip_hash, created_at)
+        VALUES ($1, NULL, $2, $3, NULL, $4, $5, NULL, now())"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("gdpr.user.data_erased")
+    .bind(&payload_hash)
+    .bind(&payload_hash)
+    .bind(payload.user_id)
+    .execute(tx.as_mut())
+    .await;
+
     tx.commit().await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
+
+    let payload_json = serde_json::json!({
+        "user_id": payload.user_id,
+        "person_id": payload.person_id,
+        "event": "gdpr_export",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    let payload_bytes = serde_json::to_vec(&payload_json).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let payload_hash = hasher.finalize().to_vec();
+
+    let _ = sqlx::query(
+        r#"INSERT INTO audit.events 
+        (event_id, policy_id, event_type, payload_hash, prev_hash, event_hash, actor_id, ip_hash, created_at)
+        VALUES ($1, NULL, $2, $3, NULL, $4, $5, NULL, now())"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("gdpr.user.data_exported")
+    .bind(&payload_hash)
+    .bind(&payload_hash)
+    .bind(payload.user_id)
+    .execute(&state.db)
+    .await;
 
     let envelope = crate::errors::SuccessEnvelope {
         data: GdprEraseResponse { status: "ok" },

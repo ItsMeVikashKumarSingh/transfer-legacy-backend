@@ -230,8 +230,9 @@ transfer-legacy/
 │   ├── 0007_notify_tables.sql              ← invites, notification_log
 │   ├── 0008_rls_policies.sql               ← deny-by-default RLS on ALL tables
 │   ├── 0009_indexes.sql                    ← all performance indexes
-│   └── 0010_triggers.sql                   ← updated_at auto-update + policy state transition
-│                                              enforcement trigger
+│   ├── 0010_triggers.sql                   ← updated_at auto-update + policy state machine
+│   │                                          enforcement trigger
+│   └── 0025_serverless_db_cron_scheduler.sql ← Phase 11 · Supabase pg_cron jobs
 │
 ├── infra/
 │   ├── Dockerfile                          ← multi-stage: builder → distroless runtime

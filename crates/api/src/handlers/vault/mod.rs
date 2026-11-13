@@ -4,14 +4,18 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub mod items;
+
 use crate::db::queries::auth::fetch_opaque_record;
 use crate::db::queries::vault::{
     delete_item, get_item, insert_item, insert_share, list_items, list_shares, revoke_share,
+    update_item,
 };
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
 use crate::state::AppState;
+use crate::middleware::user_auth::AuthenticatedUser;
 use transfer_legacy_crypto_core::{hash::sha256, jcs::canonicalize, signatures::verify_ed25519};
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
 
@@ -68,6 +72,19 @@ pub struct DeleteItemRequest {
 
 #[derive(Debug, Serialize)]
 pub struct DeleteItemResponse {
+    pub status: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateItemRequest {
+    pub user_id: Uuid,
+    pub item_id: Uuid,
+    pub ciphertext: String,
+    pub item_meta: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateItemResponse {
     pub status: &'static str,
 }
 
@@ -133,10 +150,14 @@ pub struct MigrateResponse {
 pub async fn create_item(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<CreateItemRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
     })?;
@@ -177,10 +198,14 @@ pub async fn create_item(
 pub async fn list_items_handler(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<ListItemsRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     let items = list_items(&state.db, payload.user_id).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
     })?;
@@ -207,10 +232,14 @@ pub async fn list_items_handler(
 pub async fn get_item_handler(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<GetItemRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     let item = get_item(&state.db, payload.user_id, payload.item_id)
         .await
         .map_err(|_| {
@@ -234,10 +263,14 @@ pub async fn get_item_handler(
 pub async fn delete_item_handler(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<DeleteItemRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
     })?;
@@ -257,13 +290,64 @@ pub async fn delete_item_handler(
     Ok(Json(aead))
 }
 
+pub async fn update_item_handler(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
+    headers: HeaderMap,
+    AeadJson(payload): AeadJson<UpdateItemRequest>,
+) -> Result<Json<AeadResponse>, ApiError> {
+    let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
+    require_idempotency(&state, &headers).await.map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
+    })?;
+
+    let ciphertext = URL_SAFE_NO_PAD.decode(payload.ciphertext).map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::BadRequest, &rid)
+    })?;
+
+    // Check if item exists and is owned by the user
+    let _existing = get_item(&state.db, payload.user_id, payload.item_id)
+        .await
+        .map_err(|_| {
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::NotFound, &rid)
+        })?;
+
+    update_item(
+        &state.db,
+        payload.user_id,
+        payload.item_id,
+        ciphertext,
+        payload.item_meta,
+    )
+    .await
+    .map_err(|_| {
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
+
+    let envelope = crate::errors::SuccessEnvelope {
+        data: UpdateItemResponse { status: "ok" },
+        request_id: rid,
+    };
+    let config = state.config().await;
+    let aead = wrap_response(&config, &headers, &envelope)?;
+    Ok(Json(aead))
+}
+
 pub async fn create_share(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<CreateShareRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.owner_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
     })?;
@@ -339,10 +423,14 @@ pub async fn create_share(
 pub async fn list_shares_handler(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<ListSharesRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.owner_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     let shares = list_shares(&state.db, payload.owner_id)
         .await
         .map_err(|_| {
@@ -376,10 +464,14 @@ pub async fn list_shares_handler(
 pub async fn revoke_share_handler(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<RevokeShareRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.owner_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
     })?;
@@ -402,10 +494,14 @@ pub async fn revoke_share_handler(
 pub async fn migrate_crypto(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     headers: HeaderMap,
     AeadJson(payload): AeadJson<MigrateRequest>,
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+    }
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)
     })?;

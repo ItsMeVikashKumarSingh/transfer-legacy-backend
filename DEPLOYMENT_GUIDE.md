@@ -1,95 +1,108 @@
-# Transfer Legacy - VPS Deployment Guide
+# Transfer Legacy - Serverless Deployment Guide
 
-This guide details the procedure for deploying the **Secret-Native** Transfer Legacy backend to a VPS using Docker and OpenBao.
+This guide details the procedure for deploying the **Transfer Legacy** secure inheritance backend using a modern, stateless **Serverless Architecture** via Vercel and Supabase. This approach eliminates the need for maintaining a stateful VPS and an external OpenBao vault, providing immense horizontal scalability and drastically reduced costs.
 
-## Prerequisites
-- A VPS with **Docker** and **Docker Compose** installed.
-- **bao** CLI installed on your local machine or the VPS for the initial setup.
-- Domain `api.transferlegacy.com` pointed to your VPS IP.
+## Architecture & Pricing Overview
 
----
+By moving to a serverless architecture, you bypass the fixed overhead costs of traditional VPS and HSM-backed vault deployments.
 
-## Phase 1: Initial Secret Seeding
-
-Before logic can boot, OpenBao must be initialized and seeded with cryptographic primitives.
-
-1. **Start the Infrastructure (Temporarily)**:
-   ```bash
-   docker compose up -d openbao
-   ```
-
-2. **Initialize OpenBao**:
-   If this is a fresh install, initialize and unseal OpenBao:
-   ```bash
-   # Inside the VPS
-   docker exec -it transfer-legacy-backend-openbao-1 bao operator init
-   ```
-   **IMPORTANT**: Save the recovery keys and root token securely. Unseal the vault using the keys.
-
-3. **Run the Seeding Script**:
-   The `infra/scripts/generate_and_seed.sh` script automates key generation and OpenBao configuration.
-   ```bash
-   chmod +x infra/scripts/generate_and_seed.sh
-   ./infra/scripts/generate_and_seed.sh
-   ```
-   This will output your `ROLE_ID` and `SECRET_ID`.
+| Service | Purpose | Estimated Cost |
+| --- | --- | --- |
+| **Vercel** | Serverless API execution, routing | **$0/mo** (Hobby) or $20/mo (Pro for higher limits) |
+| **Supabase** | PostgreSQL Database & `pg_cron` | **$0/mo** (Free) or $25/mo (Pro) |
+| **Upstash (Redis)** | Rate limiting, OPAQUE state, caching | **$0/mo** (Free tier covers 10k req/day) |
+| **Resend** | Transactional emails (security alerts, invites) | **$0/mo** (Free tier covers 3k emails/mo) |
+| **Backblaze B2** | Encrypted blob storage & backups | **$0/mo** (First 10GB free, then $0.006/GB) |
+| **Total Base Cost** | | **$0 / month** |
 
 ---
 
-## Phase 2: Deployment
+## Phase 1: Environment Variables Setup
 
-1. **Configure Environment**:
-   Create a `.env` file for Docker Compose:
-   ```env
-   ROLE_ID=your-role-id
-   SECRET_ID=your-secret-id
-   REDIS_PASSWORD=choose-a-strong-password
+Since we are running in a stateless serverless environment, configuration and secrets are injected via environment variables.
+
+### 1. Where to add them
+You must add these environment variables to your **Vercel Project Settings** (`Settings > Environment Variables`).
+
+### 2. Required Environment Variables
+
+#### Core & Serverless Configuration
+- `TL_SERVERLESS`: Must be set to `true` to enable stateless operation and bypass OpenBao.
+- `TL_CRON_SECRET`: A secure, random string (e.g., generate via `openssl rand -hex 32`). This protects your background job webhooks.
+- `TL_SERVER_PRIVATE_KEY_B64`: Your Ed25519 private key encoded in Base64. This powers the `InMemorySigner` for all cryptographic signatures (replacing OpenBao's Transit engine).
+
+#### Database & Caching
+- `DATABASE_URL`: Your Supabase **Transaction Pooler** connection string (usually port `6543`). **Crucial:** You must use the pooler URL to prevent Vercel from exhausting Supabase's direct connection limits.
+- `REDIS_URL`: Your Upstash Redis connection string (e.g., `rediss://default:password@region.upstash.io:6379`).
+
+#### Supabase Auth
+- `SUPABASE_URL`: Your Supabase Project URL.
+- `SUPABASE_SECRET_KEY`: Your Supabase `service_role` secret key.
+- `SUPABASE_PUBLISHABLE_KEY`: Your Supabase anon publishable key.
+
+#### Application Secrets
+*(These replace the secrets previously fetched dynamically from OpenBao)*
+- `SERVER_HMAC_SECRET`: Secure random string for HMAC generation.
+- `SERVER_AEAD_KEY`: Secure random string for AEAD encryption.
+- `JWT_SECRET`: Secure random string for JWT signing.
+- `OPAQUE_SERVER_SETUP`: Your OPAQUE server setup parameters.
+
+#### Integrations
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_FROM_NAME`: For email delivery.
+- `BACKBLAZE_B2_*`: (Key ID, App Key, Bucket Names, Endpoint URL) for object storage.
+- `BACKUP_KEY`: Encryption key for automated database backups.
+
+---
+
+## Phase 2: Database Initialization & Migrations
+
+Before deploying the API, your Supabase PostgreSQL database must be initialized with the correct schema and cron jobs.
+
+1. **Link your Supabase Project:**
+   ```bash
+   supabase link --project-ref <your-project-ref>
    ```
 
-2. **Launch the Stack**:
+2. **Run Migrations:**
+   Push all migrations located in the `migrations/` folder to your Supabase database.
    ```bash
-   docker compose up -d --build
+   supabase db push
    ```
 
 ---
 
-## Phase 3: Post-Deployment Operations
+## Phase 3: Cron Jobs Configuration
 
-### Unsealing After Reboot
-If the VPS reboots, the OpenBao container will start but will be **SEALED**. The backend will fail to boot until you manually unseal OpenBao using your recovery keys.
+Instead of a persistent polling worker, background tasks (heartbeat evaluation, audit anchoring, conflict resolution) are now stateless webhooks triggered by Supabase's `pg_cron` and `pg_net` extensions.
 
-### Live Operations: Secret Management
-The `infra/scripts/manage_secrets.sh` utility simplifies routine tasks:
+1. Locate the migration file `0025_serverless_db_cron_scheduler.sql` in your `migrations/` folder.
+2. In your Supabase SQL Editor, or via a custom migration, you must configure the cron jobs to point to your live Vercel URL.
+3. Update the `target_url` in the `pg_net` HTTP POST requests to point to your Vercel domain (e.g., `https://api.transferlegacy.com/v1/jobs/heartbeat-eval`).
+4. Update the `Authorization: Bearer` header in the `pg_net` requests to match the `TL_CRON_SECRET` you set in Vercel.
 
-- **Update a Single Secret**: (e.g., rotating the Brevo API key)
-  ```bash
-  ./infra/scripts/manage_secrets.sh update BREVO_API_KEY "new-key-value"
-  ```
-- **Rollback to Previous Version**: (if a mistake was made)
-  ```bash
-  ./infra/scripts/manage_secrets.sh rollback 5
-  ```
-- **Inspect Metadata**: See current version and last updated time.
-  ```bash
-  ./infra/scripts/manage_secrets.sh inspect
-  ```
+---
 
-Every update or rollback automatically sends a `SIGHUP` to the backend and triggers a **Security Alert** email to the owner, showing hashed identity diffs of sensitive keys.
+## Phase 4: Vercel Deployment
 
-### Recovery & Rollback
-If you mistakenly update a secret and need the old one back, **don't panic**. OpenBao KV-v2 preserves all previous versions.
+Deployment to Vercel is streamlined using the `vercel-rust` builder. The routing and build configuration are already defined in the `vercel.json` file at the root of the repository.
 
-1. **Identify the previous version**: Check your Audit Email for the version number before the mistake.
-2. **Rollback via CLI**:
+1. **Install Vercel CLI:**
    ```bash
-   # Restore version 4
-   docker exec -it <openbao_container_id> bao kv rollback -version=4 secret/transfer-legacy/prod
+   npm i -g vercel
    ```
-3. **Rollback via UI**: Navigate to the `secret/transfer-legacy/prod` path in the OpenBao Web UI, click "Versions", and select "Rollback" on the desired version.
-4. **Notify Backend**: After rolling back in Vault, send another `SIGHUP` to the backend to load the restored secrets.
 
-### Security Reminders
-- Your secrets (AEAD, HMAC, OPAQUE, JWT) **never** exist on the VPS disk in plaintext.
-- The `.env` only contains the AppRole credentials required to fetch the actual secrets into memory.
-- The root token used during seeding should be revoked or stored in a physical safe/hardware wallet.
-- OPAQUE and AEAD keys should be treated as **immutable**. Rotating them requires complex data migration logic.
+2. **Deploy to Vercel:**
+   Run the deployment command from the repository root:
+   ```bash
+   vercel --prod
+   ```
+
+Vercel will detect the `vercel.json`, compile the Rust application, and deploy it as a serverless function.
+
+---
+
+## Security Reminders for Serverless
+
+- **Environment Variable Security:** Since `TL_SERVER_PRIVATE_KEY_B64` and `SERVER_AEAD_KEY` are stored in Vercel environment variables, ensure that Vercel team access is strictly limited.
+- **Webhook Protection:** Never expose your `/v1/jobs/*` endpoints without the `TL_CRON_SECRET` bearer token protection. Supabase will securely pass this token when triggering the cron jobs.
+- **Connection Pooling:** Always use the Supabase Transaction Pooler (port `6543`) in serverless environments to prevent connection exhaustion.

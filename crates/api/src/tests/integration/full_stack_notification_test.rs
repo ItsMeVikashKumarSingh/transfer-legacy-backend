@@ -1,6 +1,5 @@
 use crate::notifications::resend::NotificationTemplate;
 use crate::tests::test_utils::spawn_app;
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[tokio::test]

@@ -150,7 +150,7 @@ pub async fn totp_verify(
 
     if !valid {
         return Err(ApiError::app_with_request_id(
-            transfer_legacy_shared_types::AppError::Unauthorized,
+            transfer_legacy_shared_types::AppError::OtpInvalid,
             &rid,
         ));
     }

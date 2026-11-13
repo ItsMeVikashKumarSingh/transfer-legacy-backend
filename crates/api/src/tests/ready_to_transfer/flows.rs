@@ -1,9 +1,8 @@
-use crate::db::queries::auth::OpaqueRecordRow;
 use crate::state::AppState;
-use serde_json::json;
 use uuid::Uuid;
 
 /// Verifies that OPAQUE records and user links are correctly saved in the DB.
+#[allow(dead_code)]
 pub async fn verify_registration_persistence(
     state: &AppState,
     user_id: Uuid,
@@ -19,6 +18,7 @@ pub async fn verify_registration_persistence(
 }
 
 /// Verifies that vault items are correctly saved and metadata is preserved.
+#[allow(dead_code)]
 pub async fn verify_vault_persistence(
     state: &AppState,
     user_id: Uuid,

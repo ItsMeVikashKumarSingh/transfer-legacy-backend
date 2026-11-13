@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrandingConfig {
@@ -10,6 +10,8 @@ pub struct BrandingConfig {
     pub support_phone: Option<String>,
     pub support_address: Option<String>,
     pub waitlist_enabled: bool,
+    pub maintenance_mode: bool,
+    pub registration_enabled: bool,
     pub theme_config: Option<serde_json::Value>,
 }
 
@@ -56,4 +58,18 @@ pub struct WaitlistEntry {
     pub name: Option<String>,
     pub meta: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CmsPage {
+    pub id: Uuid,
+    pub title: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub body: serde_json::Value,
+    pub is_published: bool,
+    pub seo_meta: serde_json::Value,
+    pub updated_by: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

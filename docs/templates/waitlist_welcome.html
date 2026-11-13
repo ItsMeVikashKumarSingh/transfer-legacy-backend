@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Welcome to the Transfer Legacy Waitlist!</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #111827; margin: 0; padding: 0; background-color: #f9fafb; }
+        .container { max-width: 600px; margin: 40px auto; padding: 40px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e5e7eb; shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .header { margin-bottom: 32px; }
+        .logo { font-size: 24px; font-weight: 800; color: #4F5CFF; text-decoration: none; }
+        h1 { font-size: 28px; font-weight: 800; margin: 0 0 16px; color: #111827; }
+        p { font-size: 16px; margin: 0 0 24px; color: #4b5563; }
+        .stats-box { background-color: #f3f4f6; border-radius: 12px; padding: 24px; margin: 32px 0; text-align: center; }
+        .stats-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; margin-bottom: 8px; }
+        .stats-value { font-size: 36px; font-weight: 800; color: #4F5CFF; margin: 0; }
+        .footer { margin-top: 40px; padding-top: 32px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #9ca3af; text-align: center; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #4F5CFF; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="logo">{{params.brand_name}}</span>
+        </div>
+        <h1>You're on the list!</h1>
+        <p>Hi {{params.owner_name}},</p>
+        <p>Thank you for joining the waitlist for <strong>{{params.brand_name}}</strong>. We're on a mission to ensure no digital asset is ever lost to time, and we're thrilled to have you as an early supporter.</p>
+        
+        <div class="stats-box">
+            <div class="stats-label">Your Priority Position</div>
+            <div class="stats-value">#{{params.position}}</div>
+        </div>
+
+        <p>Our beta rollout is happening in stages. We'll send you another email as soon as we're ready for you to secure your first vault.</p>
+        
+        <p>In the meantime, feel free to explore our <a href="{{params.app_url}}/trust" style="color: #4F5CFF; text-decoration: none;">Trust Center</a> to learn more about our zero-knowledge security architecture.</p>
+
+        <p>Stay legendary,<br>The {{params.brand_name}} Team</p>
+
+        <div class="footer">
+            &copy; 2026 {{params.brand_name}}. All rights reserved.<br>
+            If you didn't sign up for this, you can safely ignore this email.
+        </div>
+    </div>
+</body>
+</html>

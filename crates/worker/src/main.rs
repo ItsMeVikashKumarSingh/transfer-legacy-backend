@@ -12,8 +12,18 @@ use transfer_legacy_worker::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    dotenvy::from_filename(".env.local").ok();
-    dotenvy::dotenv().ok();
+    if let Err(e) = dotenvy::from_filename(".env.local") {
+        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound) {
+            eprintln!("ERROR: Failed to parse .env.local file: {}", e);
+            std::process::exit(1);
+        }
+    }
+    if let Err(e) = dotenvy::dotenv() {
+        if !matches!(e, dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound) {
+            eprintln!("ERROR: Failed to parse .env file: {}", e);
+            std::process::exit(1);
+        }
+    }
     init_tracing();
     lock_memory_pages();
     tracing::info!("worker starting");
@@ -21,13 +31,22 @@ async fn main() -> Result<(), std::io::Error> {
     // 1. Initial Load
     let config = if std::env::var("TL_ENV").unwrap_or_else(|_| "local".to_string()) == "local" {
         tracing::info!("Loading configuration from environment/dotenv...");
-        Config::from_env()
-            .map_err(|e| std::io::Error::other(format!("config error: {}", e)))?
+        match Config::from_env() {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("ERROR: Configuration error: {}", e);
+                std::process::exit(1);
+            }
+        }
     } else {
         tracing::info!("Loading configuration from OpenBao (Environment: {})...", std::env::var("TL_ENV").unwrap_or_else(|_| "unknown".into()));
-        Config::load()
-            .await
-            .map_err(|e| std::io::Error::other(format!("config error: {}", e)))?
+        match Config::load().await {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("ERROR: Failed to load configuration from OpenBao: {}", e);
+                std::process::exit(1);
+            }
+        }
     };
     let db = PgPoolOptions::new()
         .max_connections(10)

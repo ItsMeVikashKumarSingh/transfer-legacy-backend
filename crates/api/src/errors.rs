@@ -3,7 +3,6 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use metrics::counter;
 use serde::Serialize;
-use tower_http::request_id::RequestId;
 
 use transfer_legacy_shared_types::AppError;
 
@@ -60,14 +59,33 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, app_error, request_id) = match self {
-            ApiError::App(err) => (status_for(&err), err, "unknown".to_string()),
-            ApiError::AppWithRequestId(err, request_id) => (status_for(&err), err, request_id),
-            _ => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                AppError::Internal,
-                "unknown".to_string(),
-            ),
+        let (status, app_error, request_id) = match &self {
+            ApiError::App(err) => {
+                let status = status_for(err);
+                if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!("Internal AppError: {:?}", self);
+                }
+                (status, err.clone(), "unknown".to_string())
+            }
+            ApiError::AppWithRequestId(err, request_id) => {
+                let status = status_for(err);
+                if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!(
+                        "Internal AppError with request id ({}): {:?}",
+                        request_id,
+                        self
+                    );
+                }
+                (status, err.clone(), request_id.clone())
+            }
+            _ => {
+                tracing::error!("Internal server error: {:?}", self);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    AppError::Internal,
+                    "unknown".to_string(),
+                )
+            }
         };
 
         let body = ErrorEnvelope {
@@ -109,5 +127,12 @@ fn status_for(err: &AppError) -> StatusCode {
         AppError::EnvelopeRecipientMismatch => StatusCode::BAD_REQUEST,
         AppError::CryptoVersionUnsupported => StatusCode::BAD_REQUEST,
         AppError::DualSignatureRequired => StatusCode::BAD_REQUEST,
+        AppError::OtpExpired => StatusCode::NOT_FOUND,
+        AppError::OtpInvalid => StatusCode::UNAUTHORIZED,
+        AppError::UserNotFound => StatusCode::NOT_FOUND,
+        AppError::InvalidCredentials => StatusCode::UNAUTHORIZED,
+        AppError::InvalidResetToken => StatusCode::UNAUTHORIZED,
+        AppError::EmailNotVerified => StatusCode::FORBIDDEN,
+        AppError::UserAlreadyExists => StatusCode::CONFLICT,
     }
 }

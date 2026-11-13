@@ -12,12 +12,11 @@ use sqlx::PgPool;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use transfer_legacy_crypto_core::opaque::{create_server_setup, server_setup_to_b64, DefaultSuite};
+use transfer_legacy_crypto_core::opaque::DefaultSuite;
 use uuid::Uuid;
 
 use crate::config::Config;
 use crate::state::AppState;
-use axum::http::HeaderValue;
 use transfer_legacy_crypto_core::aead::{decrypt, encrypt};
 
 pub struct TestContext {
@@ -34,13 +33,18 @@ pub async fn spawn_app() -> TestContext {
 
     // Attempt to load from environment first (for local tests with .env.local),
     // then fallback to real OpenBao load if needed.
-    let config = if let Ok(c) = Config::from_env() {
+    let mut config = if let Ok(c) = Config::from_env() {
         c
     } else {
         Config::load()
             .await
             .expect("Failed to load config from both Env and OpenBao.")
     };
+
+    // Prevent real email delivery during standard test runs
+    if std::env::var("TEST_REAL_EMAIL").unwrap_or_default() != "true" {
+        config.resend_api_key = "re_mock_test_suite".to_string();
+    }
 
     let pool = PgPool::connect(&config.database_url)
         .await
@@ -49,18 +53,39 @@ pub async fn spawn_app() -> TestContext {
     // Automatically run migrations for fresh test environments, skip if requested
     if std::env::var("SKIP_MIGRATIONS").unwrap_or_default() != "true" {
         if let Err(e) = sqlx::migrate!("../../migrations").run(&pool).await {
-            tracing::warn!("Migration error (continuing anyway as tables might exist): {:?}", e);
+            tracing::warn!(
+                "Migration error (continuing anyway as tables might exist): {:?}",
+                e
+            );
         }
     }
+
+    let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
+        let key = config.server_private_key_b64.as_deref().unwrap_or_default();
+        let s =
+            crate::services::signing::InMemorySigner::new(key).expect("Test signer setup failed");
+        Arc::new(s)
+    } else {
+        let s = crate::services::signing::OpenBaoSigner::new(
+            config.openbao_addr.clone(),
+            config.openbao_token.clone(),
+        );
+        Arc::new(s)
+    };
+
+    let redis_client = redis::Client::open(config.redis_url.as_str()).unwrap();
+    let redis_conn = redis_client.get_connection_manager().await.unwrap();
 
     let state = AppState {
         config: Arc::new(RwLock::new(config.clone())),
         db: pool.clone(),
-        redis: redis::Client::open(config.redis_url.as_str()).unwrap(),
+        redis: redis_client,
+        redis_conn,
         opaque_setup: transfer_legacy_crypto_core::opaque::server_setup_from_b64(
             &config.opaque_server_setup_b64,
         )
         .expect("Mock OPAQUE fail"),
+        signer,
     };
 
     let app = crate::router::create_router(&config, state.clone());
@@ -155,6 +180,7 @@ impl CryptoClient {
     }
 }
 
+#[allow(dead_code)]
 pub async fn create_test_user(db: &PgPool, user_id: Uuid, email: &str) {
     sqlx::query("INSERT INTO auth.users (id, email) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(user_id)

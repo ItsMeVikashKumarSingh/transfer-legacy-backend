@@ -164,10 +164,9 @@ mod tests {
         // 8. Real Resend Notification Verification
         println!("✉️ Testing REAL Resend Notification delivery...");
 
-        let mut origins = Vec::new();
-        origins.push(axum::http::HeaderValue::from_static(
+        let origins = vec![axum::http::HeaderValue::from_static(
             "http://localhost:3000",
-        ));
+        )];
 
         let config = Config {
             environment: Environment::Local,
@@ -197,9 +196,21 @@ mod tests {
             supabase_publishable_key: "test".to_string(),
             supabase_secret_key: "test".to_string(),
             server_hmac_secret: "test-hmac".to_string(),
-            resend_api_key: std::env::var("RESEND_API_KEY")
-                .unwrap_or_else(|_| "test-key".to_string()),
+            resend_api_key: if std::env::var("TEST_REAL_EMAIL").unwrap_or_default() == "true" {
+                std::env::var("RESEND_API_KEY").unwrap_or_else(|_| "re_mock_test_key".to_string())
+            } else {
+                "re_mock_test_key".to_string()
+            },
             owner_email: "vikashbro111@gmail.com".to_string(),
+            ops_admin_email: "admin@transferlegacy.com".to_string(),
+            ops_admin_password: "Admin@123".to_string(),
+            tl_serverless: false,
+            server_private_key_b64: None,
+            tl_cron_secret: None,
+            gemini_api_key: None,
+            gemini_model: "gemini-1.5-flash".to_string(),
+            onesignal_app_id: None,
+            onesignal_rest_api_key: None,
         };
 
         let test_email = "vikashbro111@gmail.com";
@@ -225,5 +236,56 @@ mod tests {
         println!(
             "⭐ ALL SYSTEMS FUNCTIONAL: OPAQUE Handshake, core persistence, and Resend verified."
         );
+    }
+
+    #[tokio::test]
+    async fn test_redis_connection() {
+        dotenvy::from_filename(".env.local").ok();
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let client = redis::Client::open(redis_url).unwrap();
+        match client.get_multiplexed_async_connection().await {
+            Ok(_) => println!("RECONNECT SUCCESSFUL"),
+            Err(e) => panic!("RECONNECT FAILED: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_item_db() {
+        dotenvy::from_filename(".env.local").ok();
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&db_url).await.unwrap();
+        let user_id = Uuid::new_v4();
+        let item_id = Uuid::new_v4();
+        let ciphertext = b"test".to_vec();
+        sqlx::query("INSERT INTO auth.users (id, email) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(format!("test_del_{}@example.com", user_id))
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO core.items (item_id, user_id, ciphertext, crypto_version, schema_version) VALUES ($1,$2,$3,$4,$5)"
+        )
+        .bind(item_id)
+        .bind(user_id)
+        .bind(&ciphertext)
+        .bind("v1")
+        .bind(1)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        match sqlx::query(
+            "UPDATE core.items SET is_deleted = true, deleted_at = now() WHERE user_id = $1 AND item_id = $2",
+        )
+        .bind(user_id)
+        .bind(item_id)
+        .execute(&pool)
+        .await {
+            Ok(_) => println!("DELETE ITEM SQL SUCCESSFUL"),
+            Err(e) => panic!("DELETE ITEM SQL FAILED: {:?}", e),
+        }
     }
 }

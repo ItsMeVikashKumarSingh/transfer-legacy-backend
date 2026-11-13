@@ -10,8 +10,11 @@ use crate::config::Config;
 pub struct AppState {
     pub config: Arc<RwLock<Config>>,
     pub db: PgPool,
+    #[allow(dead_code)]
     pub redis: RedisClient,
+    pub redis_conn: redis::aio::ConnectionManager,
     pub opaque_setup: OpaqueServerSetup,
+    pub signer: Arc<dyn crate::services::signing::TransitSigner>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -22,19 +25,54 @@ pub enum StateError {
     Redis(#[from] redis::RedisError),
     #[error("opaque setup error: {0}")]
     Opaque(#[from] OpaqueError),
+    #[error("signer setup error: {0}")]
+    Signer(String),
 }
 
 impl AppState {
     pub async fn new(config: Config) -> Result<Self, StateError> {
-        let db = PgPool::connect(&config.database_url).await?;
+        let db = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(3)
+            .min_connections(0)
+            .acquire_timeout(std::time::Duration::from_secs(3))
+            .idle_timeout(std::time::Duration::from_secs(30))
+            .connect_lazy(&config.database_url)?;
         let redis = RedisClient::open(config.redis_url.as_str())?;
+
+        let redis_conn = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            redis.get_connection_manager(),
+        )
+        .await
+        .map_err(|_| {
+            redis::RedisError::from((
+                redis::ErrorKind::IoError,
+                "Redis connection timed out during startup (check your REDIS_URL and network access)",
+            ))
+        })??;
+
         let opaque_setup = server_setup_from_b64(&config.opaque_server_setup_b64)?;
+
+        let signer: Arc<dyn crate::services::signing::TransitSigner> = if config.tl_serverless {
+            let key = config.server_private_key_b64.as_deref().unwrap_or_default();
+            let s = crate::services::signing::InMemorySigner::new(key)
+                .map_err(|e| StateError::Signer(e.to_string()))?;
+            Arc::new(s)
+        } else {
+            let s = crate::services::signing::OpenBaoSigner::new(
+                config.openbao_addr.clone(),
+                config.openbao_token.clone(),
+            );
+            Arc::new(s)
+        };
 
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             db,
             redis,
+            redis_conn,
             opaque_setup,
+            signer,
         })
     }
 
@@ -57,5 +95,49 @@ impl AppState {
         crate::notifications::resend::send_notification(&config, to_email, template)
             .await
             .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    pub async fn redis_get(&self, key: &str) -> Result<Option<String>, redis::RedisError> {
+        use redis::AsyncCommands;
+        let mut conn = self.redis_conn.clone();
+        match conn.get(key).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::warn!("Redis GET failed, retrying once. Error: {:?}", e);
+                let mut retry_conn = self.redis_conn.clone();
+                retry_conn.get(key).await
+            }
+        }
+    }
+
+    pub async fn redis_set_ex(
+        &self,
+        key: &str,
+        value: &str,
+        seconds: u64,
+    ) -> Result<(), redis::RedisError> {
+        use redis::AsyncCommands;
+        let mut conn = self.redis_conn.clone();
+        match conn.set_ex(key, value, seconds).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::warn!("Redis SET_EX failed, retrying once. Error: {:?}", e);
+                let mut retry_conn = self.redis_conn.clone();
+                retry_conn.set_ex(key, value, seconds).await
+            }
+        }
+    }
+
+    pub async fn redis_del(&self, key: &str) -> Result<(), redis::RedisError> {
+        use redis::AsyncCommands;
+        let mut conn = self.redis_conn.clone();
+        match conn.del(key).await {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::warn!("Redis DEL failed, retrying once. Error: {:?}", e);
+                let mut retry_conn = self.redis_conn.clone();
+                retry_conn.del(key).await
+            }
+        }
     }
 }

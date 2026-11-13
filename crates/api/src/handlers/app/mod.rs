@@ -1,3 +1,4 @@
+pub mod cms;
 pub mod config;
 pub mod content;
 pub mod waitlist;
