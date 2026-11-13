@@ -1,0 +1,73 @@
+name: "Transfer Legacy Database Backup (IDrive e2)"
+
+on:
+  schedule:
+    # Everyday at 02:00 UTC (07:30 AM IST)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  notify-start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Heartbeat Start Signal
+        env:
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL || 'https://hc-ping.com/0e37897e-1d9c-4f52-8750-52195664f3f5' }}
+        run: |
+          if [ -n "$HEARTBEAT_URL" ]; then
+            echo "Sending START signal to Healthchecks.io..."
+            curl -fsS -m 10 --retry 3 "${HEARTBEAT_URL}/start" || true
+          fi
+
+  backup:
+    needs: notify-start
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 Client Tools
+        run: |
+          sudo install -d /etc/apt/keyrings
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /etc/apt/keyrings/postgresql.asc
+          echo "deb [signed-by=/etc/apt/keyrings/postgresql.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Execute Backup Engine
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          IDRIVE_ENDPOINT: ${{ secrets.IDRIVE_ENDPOINT || 'https://s3.ap-southeast-2.idrivee2.com' }}
+          IDRIVE_BUCKET: ${{ secrets.IDRIVE_BUCKET || 'tl-db-backup' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IDRIVE_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IDRIVE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'ap-southeast-2' }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+          BACKUP_ENCRYPT_PASSWORD: ${{ secrets.BACKUP_ENCRYPT_PASSWORD }}
+        run: |
+          chmod +x infra/scripts/backup-idrive.sh
+          ./infra/scripts/backup-idrive.sh
+
+  notify-finish:
+    needs: [backup]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Heartbeat Status Signal
+        env:
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL || 'https://hc-ping.com/0e37897e-1d9c-4f52-8750-52195664f3f5' }}
+          BACKUP_RESULT: ${{ needs.backup.result }}
+        run: |
+          if [ -z "$HEARTBEAT_URL" ]; then
+            echo "HEARTBEAT_URL is empty. Skipping ping."
+            exit 0
+          fi
+
+          if [ "$BACKUP_RESULT" == "success" ]; then
+            echo "Sending SUCCESS signal to Healthchecks.io..."
+            curl -fsS -m 10 --retry 3 --data-raw "Transfer Legacy DB Backup completed successfully" "${HEARTBEAT_URL}"
+          else
+            echo "Sending FAIL signal to Healthchecks.io..."
+            curl -fsS -m 10 --retry 3 --data-raw "Transfer Legacy DB Backup failed: ${BACKUP_RESULT}" "${HEARTBEAT_URL}/fail"
+            exit 1
+          fi
