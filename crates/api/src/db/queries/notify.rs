@@ -215,10 +215,7 @@ pub async fn mark_notification_read(
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn mark_all_notifications_read(
-    pool: &PgPool,
-    user_id: Uuid,
-) -> Result<u64, sqlx::Error> {
+pub async fn mark_all_notifications_read(pool: &PgPool, user_id: Uuid) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "UPDATE notify.user_notifications SET read = true, read_at = now() WHERE user_id = $1 AND read = false",
     )
@@ -233,13 +230,12 @@ pub async fn delete_user_notification(
     notification_id: Uuid,
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query(
-        "DELETE FROM notify.user_notifications WHERE id = $1 AND user_id = $2",
-    )
-    .bind(notification_id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+    let result =
+        sqlx::query("DELETE FROM notify.user_notifications WHERE id = $1 AND user_id = $2")
+            .bind(notification_id)
+            .bind(user_id)
+            .execute(pool)
+            .await?;
     Ok(result.rows_affected() > 0)
 }
 

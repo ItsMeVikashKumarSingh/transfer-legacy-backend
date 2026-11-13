@@ -165,4 +165,3 @@ pub struct ValidateCouponResponse {
     pub final_amount: f64,
     pub message: String,
 }
-

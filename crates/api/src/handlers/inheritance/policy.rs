@@ -11,9 +11,9 @@ use crate::db::queries::stepup::{consume_stepup_challenge_tx, fetch_stepup_chall
 use crate::errors::ApiError;
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::require_idempotency;
+use crate::middleware::user_auth::AuthenticatedUser;
 use crate::services::audit::{append_event, ip_hash_from_headers};
 use crate::state::AppState;
-use crate::middleware::user_auth::AuthenticatedUser;
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
 
 #[derive(Debug, Deserialize)]
@@ -66,7 +66,10 @@ pub async fn get_policy_handler(
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     if auth_user.user_id != uuid::Uuid::nil() && payload.owner_id != auth_user.user_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
     let policy = fetch_policy_by_owner(&state.db, payload.owner_id)
         .await
@@ -114,7 +117,10 @@ pub async fn upsert_policy(
 ) -> Result<Json<AeadResponse>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
     if auth_user.user_id != uuid::Uuid::nil() && payload.owner_id != auth_user.user_id {
-        return Err(ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Forbidden, &rid));
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
     }
     require_idempotency(&state, &headers).await.map_err(|_| {
         ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Conflict, &rid)

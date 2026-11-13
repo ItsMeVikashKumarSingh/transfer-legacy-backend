@@ -38,7 +38,10 @@ mod tests {
         let mut params = Argon2Params::desktop_defaults("salt".to_string());
         params.p = 0; // Less than 1
         let result = params.validate();
-        assert_eq!(result.unwrap_err(), "parallelism parameter 'p' must be >= 1");
+        assert_eq!(
+            result.unwrap_err(),
+            "parallelism parameter 'p' must be >= 1"
+        );
     }
 
     #[test]

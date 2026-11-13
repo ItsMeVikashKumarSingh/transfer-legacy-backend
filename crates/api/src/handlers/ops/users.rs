@@ -53,7 +53,9 @@ pub async fn update_user_status_handler(
     .await
     .ok();
 
-    Ok(Json(serde_json::json!({ "success": true, "status": payload.status })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "status": payload.status }),
+    ))
 }
 
 pub async fn update_user_plan_handler(
@@ -84,5 +86,7 @@ pub async fn update_user_plan_handler(
     .await
     .ok();
 
-    Ok(Json(serde_json::json!({ "success": true, "plan": payload.plan })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "plan": payload.plan }),
+    ))
 }

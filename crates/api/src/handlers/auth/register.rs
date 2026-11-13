@@ -5,13 +5,15 @@ use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use sha2::{Digest, Sha256};
-use crate::db::queries::auth::{insert_opaque_record, insert_person_and_link, ConsentInfo, OpaqueRecordRow};
+use crate::db::queries::auth::{
+    insert_opaque_record, insert_person_and_link, ConsentInfo, OpaqueRecordRow,
+};
 use crate::errors::{success, ApiError, SuccessEnvelope};
 use crate::middleware::aead_transport::{wrap_response, AeadJson, AeadResponse};
 use crate::middleware::rate_limit::{enforce_rate_limit, require_idempotency};
 use crate::state::AppState;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use transfer_legacy_crypto_core::opaque::{registration_finish, registration_start};
 use transfer_legacy_shared_types::{CURRENT_CRYPTO_VERSION, CURRENT_SCHEMA_VERSION};
 
@@ -308,20 +310,26 @@ pub async fn register_finish(
         consent_user_agent,
     };
 
-    let person_id = insert_person_and_link(&mut tx, session.user_id, enc_legal_name, enc_email, Some(&consent))
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to insert person and link: {:?}", e);
-            if let sqlx::Error::Database(ref db_err) = e {
-                if db_err.code().as_deref() == Some("23505") {
-                    return ApiError::app_with_request_id(
-                        transfer_legacy_shared_types::AppError::Conflict,
-                        &rid,
-                    );
-                }
+    let person_id = insert_person_and_link(
+        &mut tx,
+        session.user_id,
+        enc_legal_name,
+        enc_email,
+        Some(&consent),
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to insert person and link: {:?}", e);
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.code().as_deref() == Some("23505") {
+                return ApiError::app_with_request_id(
+                    transfer_legacy_shared_types::AppError::Conflict,
+                    &rid,
+                );
             }
-            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-        })?;
+        }
+        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+    })?;
 
     let row = OpaqueRecordRow {
         user_id: session.user_id,

@@ -45,7 +45,10 @@ pub async fn presign_attachment_upload(
     let config = state.config().await;
 
     let attachment_id = Uuid::new_v4();
-    let object_key = format!("vault/{}/{}/{}.enc", payload.user_id, payload.item_id, attachment_id);
+    let object_key = format!(
+        "vault/{}/{}/{}.enc",
+        payload.user_id, payload.item_id, attachment_id
+    );
 
     let upload_url = b2::presign_put(&config, &object_key, &payload.content_type, 900)
         .await
@@ -282,5 +285,8 @@ pub async fn delete_attachment(
             ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
         })?;
 
-    Ok(success(&rid, DeleteItemAttachmentResponse { status: "deleted" }))
+    Ok(success(
+        &rid,
+        DeleteItemAttachmentResponse { status: "deleted" },
+    ))
 }

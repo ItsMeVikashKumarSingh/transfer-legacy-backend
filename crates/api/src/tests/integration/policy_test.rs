@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use transfer_legacy_shared_types::models::inheritance::{HeartbeatRequest, PolicyUpsertRequest};
+    use transfer_legacy_shared_types::models::inheritance::{
+        HeartbeatRequest, PolicyUpsertRequest,
+    };
     use transfer_legacy_shared_types::models::policy::PolicyStatus;
     use uuid::Uuid;
 

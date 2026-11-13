@@ -66,11 +66,7 @@ pub async fn presign_put_to_bucket(
     Ok(presigned.uri().to_string())
 }
 
-pub async fn presign_get(
-    config: &Config,
-    key: &str,
-    expires_secs: u64,
-) -> Result<String, B2Error> {
+pub async fn presign_get(config: &Config, key: &str, expires_secs: u64) -> Result<String, B2Error> {
     presign_get_from_bucket(config, &config.b2_bucket_name, key, expires_secs).await
 }
 

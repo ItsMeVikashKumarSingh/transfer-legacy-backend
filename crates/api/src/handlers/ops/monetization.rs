@@ -66,7 +66,9 @@ pub async fn create_plan_handler(
     .await
     .ok();
 
-    Ok(Json(serde_json::json!({ "success": true, "id": payload.id })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "id": payload.id }),
+    ))
 }
 
 pub async fn update_plan_handler(
@@ -139,10 +141,12 @@ pub async fn delete_plan_handler(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
-    ops_queries::delete_plan(&state.db, &id).await.map_err(|e| {
-        tracing::error!("Failed to delete plan: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    ops_queries::delete_plan(&state.db, &id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete plan: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     ops_queries::log_activity(
         &state.db,
@@ -156,7 +160,9 @@ pub async fn delete_plan_handler(
     .await
     .ok();
 
-    Ok(Json(serde_json::json!({ "success": true, "deleted_id": id })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "deleted_id": id }),
+    ))
 }
 
 // --- COUPONS ---
@@ -238,7 +244,9 @@ pub async fn toggle_coupon_handler(
     .await
     .ok();
 
-    Ok(Json(serde_json::json!({ "success": true, "id": id, "active": active })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "id": id, "active": active }),
+    ))
 }
 
 pub async fn delete_coupon_handler(
@@ -249,10 +257,12 @@ pub async fn delete_coupon_handler(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
 
-    ops_queries::delete_coupon(&state.db, id).await.map_err(|e| {
-        tracing::error!("Failed to delete coupon: {:?}", e);
-        ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
-    })?;
+    ops_queries::delete_coupon(&state.db, id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete coupon: {:?}", e);
+            ApiError::app_with_request_id(transfer_legacy_shared_types::AppError::Internal, &rid)
+        })?;
 
     ops_queries::log_activity(
         &state.db,
@@ -266,7 +276,9 @@ pub async fn delete_coupon_handler(
     .await
     .ok();
 
-    Ok(Json(serde_json::json!({ "success": true, "deleted_id": id })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "deleted_id": id }),
+    ))
 }
 
 // Public endpoint for checkout coupon validation

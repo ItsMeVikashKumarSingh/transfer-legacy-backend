@@ -2,9 +2,9 @@ name: Rules Compliance
 
 on:
   push:
-    branches: ["main", "dev"]
+    branches: ["main", "dev", "master"]
   pull_request:
-    branches: ["main", "dev"]
+    branches: ["main", "dev", "master"]
 
 jobs:
   rules:
@@ -23,4 +23,5 @@ jobs:
       - name: No Server Decrypt Invariant
         run: cargo test --package transfer-legacy-api tests::security::no_server_decrypt_test::no_server_decrypt_calls_in_api_or_worker -- --exact
       - name: Security Test Suite
-        run: cargo test --package transfer-legacy-api tests::security:: -- --nocapture
+        run: |
+          cargo test --package transfer-legacy-api "tests::security::" -- --nocapture

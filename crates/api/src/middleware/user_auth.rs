@@ -7,8 +7,8 @@ use axum::{
 use uuid::Uuid;
 
 use crate::middleware::internal_auth::ensure_internal_access;
-pub use crate::services::sessions::AuthenticatedUser;
 use crate::services::sessions::verify_session_token;
+pub use crate::services::sessions::AuthenticatedUser;
 use crate::state::AppState;
 
 pub async fn user_authentication(
@@ -24,7 +24,9 @@ pub async fn user_authentication(
             .and_then(|v| v.to_str().ok())
             .and_then(|v| Uuid::parse_str(v).ok())
             .unwrap_or(Uuid::nil());
-        request.extensions_mut().insert(AuthenticatedUser { user_id });
+        request
+            .extensions_mut()
+            .insert(AuthenticatedUser { user_id });
         return Ok(next.run(request).await);
     }
 
