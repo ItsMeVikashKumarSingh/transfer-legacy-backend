@@ -39,7 +39,15 @@ async fn verify_cron_secret(state: &AppState, headers: &HeaderMap) -> Result<(),
     }
 
     let token = &auth_header[7..];
-    if token != expected {
+    use subtle::ConstantTimeEq;
+    let token_bytes = token.as_bytes();
+    let expected_bytes = expected.as_bytes();
+    let is_valid = if token_bytes.len() == expected_bytes.len() {
+        token_bytes.ct_eq(expected_bytes).unwrap_u8() == 1
+    } else {
+        false
+    };
+    if !is_valid {
         return Err(ApiError::App(AppError::Unauthorized));
     }
 

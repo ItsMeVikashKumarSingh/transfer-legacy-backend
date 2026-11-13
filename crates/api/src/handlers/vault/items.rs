@@ -8,6 +8,7 @@ use crate::db::queries::vault::{
     delete_item_attachment, get_item_attachment, insert_item_attachment, list_item_attachments,
 };
 use crate::errors::{success, ApiError, SuccessEnvelope};
+use crate::middleware::user_auth::AuthenticatedUser;
 use crate::services::b2;
 use crate::state::AppState;
 
@@ -29,9 +30,18 @@ pub struct PresignItemAttachmentResponse {
 pub async fn presign_attachment_upload(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<PresignItemAttachmentRequest>,
 ) -> Result<Json<SuccessEnvelope<PresignItemAttachmentResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
+
     let config = state.config().await;
 
     let attachment_id = Uuid::new_v4();
@@ -76,9 +86,17 @@ pub struct ConfirmItemAttachmentResponse {
 pub async fn confirm_attachment_upload(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<ConfirmItemAttachmentRequest>,
 ) -> Result<Json<SuccessEnvelope<ConfirmItemAttachmentResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
 
     let sha256 = if let Some(b64) = payload.sha256_b64 {
         URL_SAFE_NO_PAD.decode(b64).ok()
@@ -138,9 +156,17 @@ pub struct ListItemAttachmentsResponse {
 pub async fn list_attachments(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<ListItemAttachmentsRequest>,
 ) -> Result<Json<SuccessEnvelope<ListItemAttachmentsResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
 
     let rows = list_item_attachments(&state.db, payload.item_id, payload.user_id)
         .await
@@ -183,9 +209,18 @@ pub struct DownloadItemAttachmentResponse {
 pub async fn download_attachment(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<DownloadItemAttachmentRequest>,
 ) -> Result<Json<SuccessEnvelope<DownloadItemAttachmentResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
+
     let config = state.config().await;
 
     let attachment = get_item_attachment(&state.db, payload.attachment_id, payload.user_id)
@@ -228,9 +263,17 @@ pub struct DeleteItemAttachmentResponse {
 pub async fn delete_attachment(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<DeleteItemAttachmentRequest>,
 ) -> Result<Json<SuccessEnvelope<DeleteItemAttachmentResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
 
     delete_item_attachment(&state.db, payload.attachment_id, payload.user_id)
         .await

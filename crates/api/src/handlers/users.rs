@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::db::queries::auth::{fetch_user_avatar, update_user_avatar};
 use crate::errors::{success, ApiError, SuccessEnvelope};
+use crate::middleware::user_auth::AuthenticatedUser;
 use crate::services::b2;
 use crate::state::AppState;
 
@@ -25,9 +26,17 @@ pub struct PresignAvatarResponse {
 pub async fn presign_avatar_upload(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<PresignAvatarRequest>,
 ) -> Result<Json<SuccessEnvelope<PresignAvatarResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
 
     // Validate mime type
     if !payload.content_type.starts_with("image/") {
@@ -89,9 +98,17 @@ pub struct ConfirmAvatarResponse {
 pub async fn confirm_avatar_upload(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<ConfirmAvatarRequest>,
 ) -> Result<Json<SuccessEnvelope<ConfirmAvatarResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
 
     update_user_avatar(&state.db, payload.user_id, Some(&payload.avatar_url))
         .await
@@ -122,9 +139,17 @@ pub struct DeleteAvatarResponse {
 pub async fn delete_avatar(
     State(state): State<AppState>,
     Extension(request_id): Extension<tower_http::request_id::RequestId>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<DeleteAvatarRequest>,
 ) -> Result<Json<SuccessEnvelope<DeleteAvatarResponse>>, ApiError> {
     let rid = crate::middleware::request_id::request_id_string(&request_id);
+
+    if auth_user.user_id != Uuid::nil() && payload.user_id != auth_user.user_id {
+        return Err(ApiError::app_with_request_id(
+            transfer_legacy_shared_types::AppError::Forbidden,
+            &rid,
+        ));
+    }
 
     update_user_avatar(&state.db, payload.user_id, None)
         .await

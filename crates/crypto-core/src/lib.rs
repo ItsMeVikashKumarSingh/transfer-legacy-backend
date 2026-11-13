@@ -10,3 +10,6 @@ pub mod memory;
 pub mod opaque;
 pub mod signatures;
 pub mod versions;
+
+#[cfg(test)]
+mod tests;

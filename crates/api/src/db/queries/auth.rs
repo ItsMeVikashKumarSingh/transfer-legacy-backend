@@ -14,20 +14,52 @@ pub struct OpaqueRecordRow {
     pub schema_version: i32,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ConsentInfo {
+    pub terms_version: Option<String>,
+    pub privacy_version: Option<String>,
+    pub consent_ip_hash: Option<Vec<u8>>,
+    pub consent_user_agent: Option<String>,
+}
+
 pub async fn insert_person_and_link(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     enc_legal_name: Vec<u8>,
     enc_email: Vec<u8>,
+    consent: Option<&ConsentInfo>,
 ) -> Result<Uuid, sqlx::Error> {
     let person_id = Uuid::new_v4();
 
+    let (terms_at, terms_ver, priv_at, priv_ver, ip_hash, ua) = match consent {
+        Some(c) => (
+            c.terms_version.as_ref().map(|_| chrono::Utc::now()),
+            c.terms_version.clone(),
+            c.privacy_version.as_ref().map(|_| chrono::Utc::now()),
+            c.privacy_version.clone(),
+            c.consent_ip_hash.clone(),
+            c.consent_user_agent.clone(),
+        ),
+        None => (None, None, None, None, None, None),
+    };
+
     sqlx::query(
-        "INSERT INTO auth_ext.persons (person_id, enc_legal_name, enc_email) VALUES ($1, $2, $3)",
+        r#"INSERT INTO auth_ext.persons (
+            person_id, enc_legal_name, enc_email,
+            terms_accepted_at, terms_version,
+            privacy_accepted_at, privacy_version,
+            consent_ip_hash, consent_user_agent
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
     )
     .bind(person_id)
     .bind(enc_legal_name)
     .bind(enc_email)
+    .bind(terms_at)
+    .bind(terms_ver)
+    .bind(priv_at)
+    .bind(priv_ver)
+    .bind(ip_hash)
+    .bind(ua)
     .execute(tx.as_mut())
     .await?;
 
