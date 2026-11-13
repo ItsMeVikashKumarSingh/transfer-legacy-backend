@@ -72,6 +72,7 @@ async fn get_auth_token(
 }
 
 #[tokio::test]
+#[ignore = "requires live database"]
 async fn test_inheritance_lifecycle() {
     let ctx = spawn_app().await;
     let mut client = CryptoClient::new(&ctx);
