@@ -207,6 +207,10 @@ mod tests {
             tl_serverless: false,
             server_private_key_b64: None,
             tl_cron_secret: None,
+            gemini_api_key: None,
+            gemini_model: "gemini-1.5-flash".to_string(),
+            onesignal_app_id: None,
+            onesignal_rest_api_key: None,
         };
 
         let test_email = "vikashbro111@gmail.com";

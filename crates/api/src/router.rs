@@ -130,6 +130,11 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/", post(crate::handlers::devices::list))
         .route("/:device_id", delete(crate::handlers::devices::revoke));
 
+    let user_auth_layer = from_fn_with_state(
+        state.clone(),
+        crate::middleware::user_auth::user_authentication,
+    );
+
     let vault_routes = Router::new()
         .route("/items", post(crate::handlers::vault::create_item))
         .route(
@@ -174,7 +179,8 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route(
             "/items/attachments/delete",
             post(crate::handlers::vault::items::delete_attachment),
-        );
+        )
+        .layer(user_auth_layer.clone());
 
     let user_routes = Router::new()
         .route(
@@ -186,6 +192,7 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
             post(crate::handlers::users::confirm_avatar_upload),
         )
         .route("/avatar", delete(crate::handlers::users::delete_avatar))
+        .layer(user_auth_layer.clone())
         .route("/:user_id/avatar", get(crate::handlers::users::get_avatar));
 
     let inheritance_routes = Router::new()
