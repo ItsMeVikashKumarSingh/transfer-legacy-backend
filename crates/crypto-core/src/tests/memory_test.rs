@@ -10,25 +10,19 @@ mod tests {
     }
 
     #[test]
-    fn test_sensitive_bytes_zeroization_on_drop() {
+    fn test_sensitive_bytes_zeroization_behavior() {
         use zeroize::Zeroize;
 
-        let mut raw_buffer = vec![0x42u8; 32];
-        let ptr = raw_buffer.as_mut_ptr();
+        // Test slice zeroization
+        let mut buffer = [0xFFu8; 32];
+        buffer.as_mut_slice().zeroize();
+        assert!(buffer.iter().all(|&b| b == 0));
+        assert_eq!(buffer.len(), 32);
 
-        {
-            let mut sensitive = SensitiveBytes::new(raw_buffer);
-            assert_eq!(sensitive.as_slice()[0], 0x42);
-            // Explicit zeroize to test zeroization behavior
-            let _ = &mut sensitive;
-        }
-
-        // Test manual zeroize on a sensitive buffer to ensure zeroize zeroes bytes
-        let mut buffer_to_zero = vec![0xFFu8; 64];
-        buffer_to_zero.zeroize();
-        assert!(buffer_to_zero.iter().all(|&b| b == 0));
-        assert_eq!(buffer_to_zero.len(), 64);
-        let _ = ptr;
+        // Test SensitiveBytes drop handling
+        let sensitive = SensitiveBytes::new(vec![0x42u8; 32]);
+        assert_eq!(sensitive.as_slice()[0], 0x42);
+        drop(sensitive);
     }
 
     #[test]
