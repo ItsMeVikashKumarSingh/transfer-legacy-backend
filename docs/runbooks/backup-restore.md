@@ -1,48 +1,57 @@
 ---
-title: "Backup and Restore Runbook"
-date: "2026-04-08"
-status: "draft"
+title: "Backup and Restore Runbook (IDrive e2)"
+date: "2026-11-13"
+status: "active"
 ---
 
-## Backup Job
-Script: `infra/scripts/backup.sh`
+## 1. Architecture Overview
+Transfer Legacy database backups are executed daily, encrypted with AES-256 (PBKDF2, 100,000 iterations), and uploaded exclusively to dedicated IDrive e2 S3 storage (`tl-db-backup`). Restores are verified automatically every Sunday in an isolated Docker sandbox.
 
-## Required Environment
-- `DATABASE_URL`
-- `OPENBAO_ADDR`
-- `OPENBAO_TOKEN`
-- `OPENBAO_BACKUP_KEY_PATH` (default `secret/data/transfer-legacy/backup`)
-- `OPENBAO_BACKUP_KEY_FIELD` (default `key`)
-- `BACKBLAZE_B2_KEY_ID`
-- `BACKBLAZE_B2_APP_KEY`
-- `BACKBLAZE_B2_ENDPOINT_URL`
-- `BACKBLAZE_B2_BACKUP_BUCKET_NAME`
+## 2. Infrastructure & Endpoints
+- **Storage Provider:** IDrive e2 (S3 API)
+- **Bucket:** `tl-db-backup`
+- **Region:** `ap-southeast-2` (`https://s3.ap-southeast-2.idrivee2.com`)
+- **Health Monitoring:** Healthchecks.io (`https://hc-ping.com/0e37897e-1d9c-4f52-8750-52195664f3f5`)
+- **Database Engine:** Supabase PostgreSQL 17 (Session Pooler Port `5432`)
 
-## Backup Procedure
-1. Run nightly via cron.
-2. Create compressed `pg_dump`.
-3. Pull backup encryption key from OpenBao KV at runtime.
-4. Encrypt with AES-256-GCM using runtime key material.
-5. Upload encrypted artifact to `daily/`.
-6. On day 1 of each month, also upload to `monthly/`.
-7. Prune daily to 30 objects and monthly to 12 objects.
+## 3. Daily Backup Pipeline
+- **Workflow:** `.github/workflows/backup.yml`
+- **Script:** `infra/scripts/backup-idrive.sh`
+- **Schedule:** Everyday at 02:00 UTC (07:30 AM IST)
+- **Steps:**
+  1. Sends heartbeat START signal to Healthchecks.io.
+  2. Runs `pg_dump` over Session Pooler (port 5432) excluding ephemeral connection schemas (`pgbouncer`).
+  3. Compresses archive (`tar.gz`) and encrypts via OpenSSL (`AES-256-CBC -pbkdf2 -iter 100000`).
+  4. Uploads to `s3://tl-db-backup/transfer-legacy/daily/`.
+  5. On the 1st of each month, copies snapshot to `s3://tl-db-backup/transfer-legacy/monthly/`.
+  6. Automatically prunes daily backups older than 30 days.
+  7. Sends SUCCESS or FAIL signal to Healthchecks.io.
 
-## Restore Test
-Script: `infra/scripts/restore-test.sh`
+## 4. Weekly Restore Drill Sandbox
+- **Workflow:** `.github/workflows/restore-drill.yml`
+- **Script:** `infra/scripts/restore-drill-idrive.sh`
+- **Schedule:** Every Sunday at 04:00 UTC
+- **Steps:**
+  1. Downloads latest backup archive from `s3://tl-db-backup/transfer-legacy/daily/`.
+  2. Decrypts package using `BACKUP_ENCRYPT_PASSWORD`.
+  3. Launches ephemeral `postgres:17-alpine` Docker container.
+  4. Pre-provisions Supabase platform schemas/roles and Transfer Legacy domain schemas (`auth_ext`, `core`, `inheritance`, `audit`, `ops`, `notify`, `app`).
+  5. Restores dump file.
+  6. Asserts table existence and record counts on critical tables:
+     - `auth_ext.persons`
+     - `core.items`
+     - `inheritance.policies`
+     - `inheritance.heartbeats`
+     - `audit.events`
+     - `ops.roles`
+     - `app.settings`
+  7. Ensures total application tables across Transfer Legacy schemas is `>= 10`.
 
-## Restore Procedure
-1. Download dated encrypted backup from B2.
-2. Resolve key from OpenBao KV and decrypt backup.
-3. Restore into ephemeral Postgres.
-4. Validate non-system table count is non-zero.
-5. Re-apply all migrations from `migrations/*.sql`.
-6. Verify table count does not regress.
-
-## Retention
-- Keep 30 daily backups.
-- Keep 12 monthly backups.
-
-## Automation
-- GitHub workflow: `.github/workflows/backup-restore.yml`
-- Daily backup cron: `0 1 * * *`
-- Weekly restore validation cron: `0 4 * * 0`
+## 5. Required GitHub Secrets
+- `DATABASE_URL`: Session pooler connection string.
+- `IDRIVE_ENDPOINT`: `https://s3.ap-southeast-2.idrivee2.com`
+- `IDRIVE_BUCKET`: `tl-db-backup`
+- `IDRIVE_KEY_ID`: IDrive S3 Access Key ID
+- `IDRIVE_SECRET_KEY`: IDrive S3 Secret Access Key
+- `BACKUP_ENCRYPT_PASSWORD`: AES-256 PBKDF2 passphrase
+- `HEARTBEAT_URL`: `https://hc-ping.com/0e37897e-1d9c-4f52-8750-52195664f3f5`
