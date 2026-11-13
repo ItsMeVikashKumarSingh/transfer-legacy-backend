@@ -59,7 +59,11 @@ pub fn scrub_credentials(text: &str) -> (String, bool) {
     }
 
     // Check for 12, 18, or 24-word consecutive space-separated lowercase words resembling seed phrases
-    if words.len() >= 12 && words.iter().all(|w| w.chars().all(|c| c.is_ascii_lowercase())) {
+    if words.len() >= 12
+        && words
+            .iter()
+            .all(|w| w.chars().all(|c| c.is_ascii_lowercase()))
+    {
         if words.len() == 12 || words.len() == 18 || words.len() == 24 {
             scrubbed = "[REDACTED_POTENTIAL_MNEMONIC_PHRASE]".to_string();
             redacted = true;
@@ -86,7 +90,11 @@ impl AiPlannerService {
             .filter(|m| !m.trim().is_empty())
             .unwrap_or_else(|| "gemini-2.5-flash".to_string());
 
-        Self { client, api_key, model }
+        Self {
+            client,
+            api_key,
+            model,
+        }
     }
 
     pub async fn query(
@@ -100,7 +108,10 @@ impl AiPlannerService {
         // If an API key is available, call Google Gemini
         if let Some(ref key) = self.api_key {
             if !key.trim().is_empty() {
-                match self.call_gemini(key, &sanitized_input, history, context).await {
+                match self
+                    .call_gemini(key, &sanitized_input, history, context)
+                    .await
+                {
                     Ok(reply) => {
                         let final_reply = if redacted {
                             format!("> ⚠️ **Notice**: A potential private key or secret phrase was detected and redacted prior to transmission for your safety.\n\n{}", reply)
@@ -116,7 +127,10 @@ impl AiPlannerService {
                         };
                     }
                     Err(err) => {
-                        tracing::warn!("Gemini API call failed: {}. Falling back to internal engine.", err);
+                        tracing::warn!(
+                            "Gemini API call failed: {}. Falling back to internal engine.",
+                            err
+                        );
                     }
                 }
             }
@@ -198,8 +212,7 @@ impl AiPlannerService {
 
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            self.model,
-            api_key
+            self.model, api_key
         );
 
         let mut last_err = String::new();
@@ -237,7 +250,9 @@ impl AiPlannerService {
                 }
             };
 
-            if let Some(candidate_text) = resp_json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+            if let Some(candidate_text) =
+                resp_json["candidates"][0]["content"]["parts"][0]["text"].as_str()
+            {
                 return Ok(candidate_text.to_string());
             }
         }

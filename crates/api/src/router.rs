@@ -19,7 +19,13 @@ use crate::state::AppState;
 pub fn create_router(config: &Config, state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(config.allowed_origins.clone()))
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+        ])
         .allow_headers([
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
@@ -245,8 +251,10 @@ pub fn create_router(config: &Config, state: AppState) -> Router {
         .route("/export", post(crate::handlers::gdpr::export_gdpr))
         .route("/erase", post(crate::handlers::gdpr::erase_gdpr));
 
-    let ai_routes = Router::new()
-        .route("/planner/chat", post(crate::handlers::ai::planner_chat_handler));
+    let ai_routes = Router::new().route(
+        "/planner/chat",
+        post(crate::handlers::ai::planner_chat_handler),
+    );
 
     let notification_routes = Router::new()
         .route("/", get(crate::handlers::notifications::list_notifications))

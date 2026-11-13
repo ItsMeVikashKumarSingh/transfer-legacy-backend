@@ -16,11 +16,7 @@ mod tests {
         let message = b"Transfer Legacy Audit Log Record #1001";
         let signature = signing_key.sign(message);
 
-        let result = verify_ed25519(
-            verifying_key.as_bytes(),
-            message,
-            &signature.to_bytes(),
-        );
+        let result = verify_ed25519(verifying_key.as_bytes(), message, &signature.to_bytes());
         assert!(result.is_ok());
     }
 
